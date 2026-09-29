@@ -53,6 +53,7 @@ function renderFluxo() {
         <div class="op-kpis" id="fx-kpis"></div>
         <div class="op-filters">
           <input id="f-search" placeholder="Buscar por nome, CRM, CPF, hospital ou telefone...">
+          <div style="position:relative" id="f-hosp-wrap"><div id="fx-hosp-top" style="display:contents"></div></div>
           <button id="f-toggle">⚙ Filtros<span id="f-count" class="op-fcount" hidden></span></button>
           <div class="seg-toggle" id="fx-mode"><button data-mode="jornada">🧭 Jornada</button><button data-mode="kanban">▦ Kanban</button></div>
           <div class="op-nav-pill" id="fx-nav">
@@ -156,11 +157,10 @@ function buildFilters() {
   const estados = uniq(S.doctors.map((d) => d.estado).filter(Boolean)).sort();
   const setores = uniq([...SETORES, ...S.doctors.flatMap((d) => d.setores || [])]);
   const opt = (v, l, sel) => `<option value="${esc(v)}" ${sel === v ? 'selected' : ''}>${esc(l)}</option>`;
+  $('#fx-hosp-top').innerHTML = `
+    <button id="f-hosp-btn" title="Filtrar por hospital (pode escolher vários)"></button>
+    <div class="pop" id="f-hosp-pop" hidden style="top:38px;left:0;right:auto;width:340px;padding:8px"></div>`;
   $('#fx-more').innerHTML = `
-    <div style="position:relative" id="f-hosp-wrap">
-      <button id="f-hosp-btn"></button>
-      <div class="pop" id="f-hosp-pop" hidden style="top:38px;left:0;right:auto;width:330px;padding:8px"></div>
-    </div>
     <select id="f-stage"><option value="">Qualquer etapa</option>${S.stages.map((s) => opt(s.id, s.label, F.stage)).join('')}</select>
     <select id="f-setor"><option value="">Todos os setores</option>${setores.map((s) => opt(s, s, F.setor)).join('')}</select>
     <select id="f-prio"><option value="">Qualquer prioridade</option>${Object.entries(PRIORITIES).map(([k, l]) => opt(k, l, F.priority)).join('')}</select>
@@ -189,9 +189,15 @@ function buildFilters() {
 function renderHospPop() {
   const names = uniq([...S.hospitals.map((h) => h.nome), ...S.doctors.map((d) => d.hospital)]).sort((a, b) => a.localeCompare(b));
   const pop = $('#f-hosp-pop');
-  pop.innerHTML = `<div style="display:flex;justify-content:space-between;padding:2px 4px 8px"><button class="btn-ghost" id="hp-all">Selecionar todos</button><button class="btn-ghost" id="hp-none">Limpar</button></div>` +
-    names.map((n) => `<label style="display:flex;gap:8px;padding:4px;font-size:12.5px;cursor:pointer"><input type="checkbox" value="${esc(n)}" ${F.hospitals.includes(n) ? 'checked' : ''}> ${esc(n)}</label>`).join('');
-  $$('input', pop).forEach((c) => c.onchange = () => { F.hospitals = $$('input:checked', pop).map((x) => x.value); refreshFluxo(); });
+  const cnt = {};
+  S.doctors.forEach((d) => { if (!FINAL_STAGES.includes(d.stage)) cnt[d.hospital] = (cnt[d.hospital] || 0) + 1; });
+  pop.innerHTML = `<input class="inp" id="hp-q" placeholder="Buscar hospital..." style="margin-bottom:6px">
+    <div style="display:flex;justify-content:space-between;padding:2px 4px 6px"><button class="btn-ghost" id="hp-all">Selecionar todos</button><button class="btn-ghost" id="hp-none">Limpar</button></div>
+    <div id="hp-list" style="max-height:320px;overflow:auto">` +
+    names.map((n) => `<label data-h="${esc(norm(n))}" style="display:flex;gap:8px;padding:4px;font-size:12.5px;cursor:pointer"><input type="checkbox" value="${esc(n)}" ${F.hospitals.includes(n) ? 'checked' : ''}> <span style="flex:1">${esc(n)}</span><span class="muted">${cnt[n] || 0}</span></label>`).join('') + '</div>';
+  $('#hp-q', pop).oninput = (e) => { const q = norm(e.target.value); $$('#hp-list label', pop).forEach((l) => { l.hidden = q && !l.dataset.h.includes(q); }); };
+  $('#hp-q', pop).focus();
+  $$('input[type=checkbox]', pop).forEach((c) => c.onchange = () => { F.hospitals = $$('input[type=checkbox]:checked', pop).map((x) => x.value); refreshFluxo(); });
   $('#hp-all', pop).onclick = () => { F.hospitals = names.slice(); renderHospPop(); refreshFluxo(); };
   $('#hp-none', pop).onclick = () => { F.hospitals = []; renderHospPop(); refreshFluxo(); };
 }
