@@ -10,33 +10,49 @@ function friendlyDbError(error, fallback) {
 }
 
 // ---------- novo médico ----------
+/** Quem pode receber o cadastro. Padrão: se eu sou do Cadastro, eu mesmo; senão, a última pessoa escolhida ou a 1ª do Cadastro. */
+function handoffOptions() {
+  const ps = Object.values(S.profiles).filter((p) => p.ativo);
+  const cad = ps.filter((p) => p.setor === 'cadastro').sort((a, b) => a.display_name.localeCompare(b.display_name));
+  const outros = ps.filter((p) => p.setor !== 'cadastro').sort((a, b) => a.display_name.localeCompare(b.display_name));
+  let def = null;
+  if (S.profile?.setor === 'cadastro') def = S.user.id;
+  if (!def) { try { const last = localStorage.getItem('flow:handoff'); if (last && S.profiles[last]?.ativo) def = last; } catch (_) { /* ignora */ } }
+  if (!def) def = cad[0]?.user_id || S.user.id;
+  const opt = (p) => `<option value="${p.user_id}" ${p.user_id === def ? 'selected' : ''}>${esc(p.display_name)}${p.user_id === S.user.id ? ' (eu)' : ''}</option>`;
+  return (cad.length ? `<optgroup label="Cadastro">${cad.map(opt).join('')}</optgroup>` : '') + `<optgroup label="${cad.length ? 'Outros' : 'Equipe'}">${outros.map(opt).join('')}</optgroup>`;
+}
 function openNewDoctor() {
   const m = openModal(`
-    <div class="modal-head"><h2>Novo cadastro de médico</h2><button class="x" data-close>✕</button></div>
+    <div class="modal-head"><div><h2>Novo cadastro de médico</h2><div class="om-sub">Preencha o essencial — o time de Cadastro completa o resto depois.</div></div><button class="x" data-close>✕</button></div>
     <div class="modal-body">
       <div class="form-grid">
         <div class="field full"><label>Nome completo *</label><input class="inp" id="nd-name" placeholder="Dr. / Dra."></div>
         <div class="field"><label>WhatsApp *</label><input class="inp" id="nd-wa" placeholder="(11) 99999-9999"></div>
-        <div class="field"><label>CPF</label><input class="inp" id="nd-cpf" placeholder="000.000.000-00"></div>
-        <div class="field"><label>CRM (número)</label><input class="inp" id="nd-crm" placeholder="123456"></div>
-        <div class="field"><label>UF do CRM</label><input class="inp" id="nd-uf" value="SP" maxlength="2"></div>
-        <div class="field full"><label>Setor *</label><div class="checks" id="nd-setores">${SETORES.map((s) => `<label><input type="checkbox" value="${esc(s)}"> ${esc(s)}</label>`).join('')}</div></div>
+        <div class="field" style="display:grid;grid-template-columns:1fr 70px;gap:6px"><div class="field" style="margin:0"><label>CRM (número)</label><input class="inp" id="nd-crm" placeholder="123456"></div><div class="field" style="margin:0"><label>UF</label><input class="inp" id="nd-uf" value="SP" maxlength="2"></div></div>
         <div class="field full"><label>Hospitais * <span class="muted">(1 cadastro por hospital)</span></label><div class="checks" id="nd-hosps"></div></div>
         <div class="full" id="nd-conflicts"></div>
-        <div class="field"><label>Status especialidade</label><select class="inp" id="nd-status"><option value="">—</option>${STATUS_ESP.map((s) => `<option>${s}</option>`).join('')}</select></div>
-        <div class="field"><label>RQE</label><input class="inp" id="nd-rqe"></div>
-        <div class="field"><label>DISC</label><select class="inp" id="nd-disc"><option value="">—</option>${DISC.map((s) => `<option value="${esc(s)}">${esc(DISC_LABEL[s])}</option>`).join('')}</select></div>
+        <div class="field full"><label>Setor *</label><div class="checks" id="nd-setores">${SETORES.map((s) => `<label><input type="checkbox" value="${esc(s)}"> ${esc(s)}</label>`).join('')}</div></div>
         <div class="field"><label>Prioridade</label><select class="inp" id="nd-prio">${Object.entries(PRIORITIES).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
-        <div class="full switches">
-          <label><input type="checkbox" id="nd-med"> MedSimples</label>
-          <label><input type="checkbox" id="nd-proc"> Procuração</label>
-          <label><input type="checkbox" id="nd-app"> APP</label>
-        </div>
-        <div class="field full"><label>Observações</label><textarea class="inp" id="nd-obs"></textarea></div>
+        <div class="field"><label>Encaminhar para (quem vai acompanhar)</label><select class="inp" id="nd-resp">${handoffOptions()}</select></div>
+        <div class="field full"><label>Observações para o Cadastro</label><textarea class="inp" id="nd-obs" placeholder="Ex.: começa na escala de outubro, já mandou alguns documentos por WhatsApp..."></textarea></div>
       </div>
+      <details class="nd-more"><summary>Mais detalhes (opcional)</summary>
+        <div class="form-grid" style="margin-top:10px">
+          <div class="field"><label>CPF</label><input class="inp" id="nd-cpf" placeholder="000.000.000-00"></div>
+          <div class="field"><label>Status especialidade</label><select class="inp" id="nd-status"><option value="">—</option>${STATUS_ESP.map((s) => `<option>${s}</option>`).join('')}</select></div>
+          <div class="field"><label>RQE</label><input class="inp" id="nd-rqe"></div>
+          <div class="field"><label>DISC</label><select class="inp" id="nd-disc"><option value="">—</option>${DISC.map((s) => `<option value="${esc(s)}">${esc(DISC_LABEL[s])}</option>`).join('')}</select></div>
+          <div class="full switches">
+            <label><input type="checkbox" id="nd-med"> MedSimples</label>
+            <label><input type="checkbox" id="nd-proc"> Procuração</label>
+            <label><input type="checkbox" id="nd-app"> APP</label>
+          </div>
+        </div>
+      </details>
       <div class="alert b small" id="nd-summary" hidden></div>
     </div>
-    <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="nd-ok" disabled>Cadastrar</button></div>`);
+    <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="nd-ok" disabled>Cadastrar e encaminhar</button></div>`);
   const el = m.el;
   const hospSel = new Set(), setorSel = new Set(), reasons = {};
 
@@ -98,8 +114,9 @@ function openNewDoctor() {
       priority: $('#nd-prio', el).value, medsimples: $('#nd-med', el).checked ? 'Sim' : '', procuracao: $('#nd-proc', el).checked,
       app: $('#nd-app', el).checked, observations: $('#nd-obs', el).value.trim(), stage: 'aguardando_contato',
       sla_hours: stageById('aguardando_contato')?.sla_hours ?? 24,
-      proxima_acao: ACAO_POR_ETAPA.aguardando_contato, proxima_data: ymdToday(), proximo_responsavel_id: S.user.id,
+      proxima_acao: ACAO_POR_ETAPA.aguardando_contato, proxima_data: ymdToday(), proximo_responsavel_id: $('#nd-resp', el).value || S.user.id,
     };
+    try { if (S.profile?.setor !== 'cadastro') localStorage.setItem('flow:handoff', base.proximo_responsavel_id); } catch (_) { /* ignora */ }
     let created = 0, failed = 0;
     for (const h of hospSel) {
       if (conf[h]) {
@@ -113,7 +130,7 @@ function openNewDoctor() {
       await sb.from('flow_activities').insert({ doctor_id: data.id, type: 'stage_change', description: 'Cadastro criado no sistema' });
       created++;
     }
-    if (created) toast(`${created} cadastro(s) criado(s) com sucesso!`, 'ok');
+    if (created) toast(base.proximo_responsavel_id === S.user.id ? `${created} cadastro(s) criado(s)!` : `${created} cadastro(s) criado(s) e encaminhado(s) para ${respName(base.proximo_responsavel_id)}`, 'ok');
     if (!failed) m.close(); else btn.disabled = false;
     afterDoctorChange();
   };
@@ -232,6 +249,7 @@ function drawResumoTab(body, d) {
       <div class="astat"><span class="an">${contatos}</span><span class="al">Contatos / cobranças</span></div>
       <div class="astat"><span class="an">${PV.acts.length}</span><span class="al">Registros no histórico</span></div>
       <div class="astat"><span class="an">${fmtDate(d.entry_date)}</span><span class="al">Entrada</span></div>
+      ${d.created_by && S.profiles[d.created_by] ? `<div class="astat"><span class="an" style="font-size:1rem">${esc(S.profiles[d.created_by].display_name)}</span><span class="al">Cadastrado por${S.profiles[d.created_by].setor ? ' · ' + esc(SETOR_USUARIO[S.profiles[d.created_by].setor] || S.profiles[d.created_by].setor) : ''}</span></div>` : ''}
     </div>
     ${d.doc_pendente ? `<div class="es-box" style="background:var(--amber-soft);border-color:var(--amber-line)"><div class="ql" style="color:var(--amber-ink)">📄 Documento pendente</div>${esc(d.doc_pendente)}</div>` : ''}
     <div class="pv-grid">

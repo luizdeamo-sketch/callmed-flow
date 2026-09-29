@@ -166,6 +166,8 @@ async function openHoje() {
     const slaHoje = open.filter((d) => { const s = doctorSla(d); return s.status === 'warning'; }).sort((a, b) => doctorSla(a).remaining - doctorSla(b).remaining);
     const t0 = new Date(); t0.setHours(0, 0, 0, 0);
     const encerradosHoje = S.doctors.filter((d) => FINAL_STAGES.includes(d.stage) && new Date(d.stage_entered_at) >= t0);
+    const encaminhados = open.filter((d) => d.created_by === me && d.proximo_responsavel_id && d.proximo_responsavel_id !== me)
+      .sort((a, b) => new Date(b.entry_date) - new Date(a.entry_date));
     const tars = (tarefas || []).filter((t) => !HJ.onlyMine || t.responsavel_id === me || t.created_by === me);
     const row = (d, right, sub) => `<div class="hj-row"><a href="#" data-openp="${d.id}">${esc(d.name)}</a> <small class="muted">· ${esc(d.hospital)}${sub ? ' · ' + sub : ''}</small><span class="hj-right">${right || ''}</span></div>`;
     const sec = (title, cnt, html, hint) => `<div class="es-box"><div class="ql">${title} <span class="tagx" style="margin-left:6px">${cnt}</span>${hint ? `<span class="hint" style="margin:0 0 0 8px;text-transform:none;letter-spacing:0;font-family:Inter">${hint}</span>` : ''}</div>${html || '<div class="hint" style="margin:0">Nada por aqui. 👍</div>'}</div>`;
@@ -180,6 +182,7 @@ async function openHoje() {
       }).join(''))}
       ${sec('🚨 SLA vencendo (últimas horas do prazo)', slaHoje.length, slaHoje.slice(0, 40).map((d) => row(d, `<span class="slapill warning">${fmtRemaining(doctorSla(d).remaining)}</span>`, esc(stageLabel(d.stage)))).join(''), 'mova de etapa antes que vença')}
       ${HJ.onlyMine ? '' : sec('⚠ Em andamento sem próxima ação', semAcao.length, semAcao.slice(0, 40).map((d) => row(d, `<button class="btn btn-line btn-sm" data-def="${d.id}">Definir</button>`, esc(stageLabel(d.stage)))).join('') + (semAcao.length > 40 ? `<div class="hint">+${semAcao.length - 40} outros — use a pílula “sem próxima ação” no Fluxo.</div>` : ''))}
+      ${encaminhados.length ? sec('📨 Cadastros que encaminhei (em andamento)', encaminhados.length, encaminhados.slice(0, 40).map((d) => row(d, `<span class="tagx mute">${esc(respName(d.proximo_responsavel_id))}</span>`, `${esc(stageLabel(d.stage))} · há ${Math.floor((Date.now() - new Date(d.entry_date)) / 864e5)}d`)).join(''), 'para acompanhar sem precisar cobrar') : ''}
       ${sec('✅ Encerrados hoje', encerradosHoje.length, encerradosHoje.map((d) => row(d, `<span class="tagx ${d.stage === 'aprovado' ? 'ok' : 'bad'}">${esc(stageLabel(d.stage))}</span>`)).join(''))}
       <div class="es-box"><div class="ql">📝 Tarefas avulsas</div>
         ${tars.map((t) => `<div class="hj-row"><label class="small" style="display:flex;gap:8px;align-items:center;flex:1"><input type="checkbox" data-task="${t.id}" ${t.concluida ? 'checked' : ''}> <span style="${t.concluida ? 'text-decoration:line-through;color:var(--ink-faint)' : ''}">${esc(t.descricao)}</span>

@@ -412,3 +412,23 @@ create policy flow_tar_del on public.flow_tarefas for delete to authenticated us
 -- ---------- migração 6: tipo 'acao' no histórico (próxima ação definida/concluída; não gera notificação) ----------
 alter table public.flow_activities drop constraint flow_activities_type_check;
 alter table public.flow_activities add constraint flow_activities_type_check check (type in ('stage_change','note','contact','cobranca','doc','admin','acao'));
+
+-- ---------- migração 7: aviso (🔔) quando a próxima ação de um médico é passada para outra pessoa ----------
+create or replace function public.flow_doctors_notify_handoff()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_actor text;
+begin
+  if auth.uid() is null or new.proximo_responsavel_id is null or new.proximo_responsavel_id = auth.uid() then return new; end if;
+  if tg_op = 'UPDATE' and new.proximo_responsavel_id is not distinct from old.proximo_responsavel_id then return new; end if;
+  if not exists (select 1 from public.flow_profiles where user_id = new.proximo_responsavel_id and ativo) then return new; end if;
+  v_actor := coalesce((select nullif(display_name,'') from public.flow_profiles where user_id = auth.uid()), 'Alguém');
+  insert into public.flow_notifications (user_id, doctor_id, doctor_name, message, created_by_name)
+  values (new.proximo_responsavel_id, new.id, new.name,
+          format('%s te passou: %s (%s) — %s%s', v_actor, new.name, new.hospital, coalesce(new.proxima_acao, 'acompanhar cadastro'),
+                 case when new.proxima_data is null then '' when new.proxima_data <= current_date then ' (hoje)' else ' (' || to_char(new.proxima_data, 'DD/MM') || ')' end),
+          v_actor);
+  return new;
+end $$;
+create trigger flow_doctors_notify_handoff after insert or update of proximo_responsavel_id on public.flow_doctors
+  for each row execute function public.flow_doctors_notify_handoff();
+revoke execute on function public.flow_doctors_notify_handoff() from public, anon, authenticated;

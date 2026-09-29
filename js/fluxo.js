@@ -3,7 +3,7 @@
 
 const F = {
   search: '', hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false,
-  next: '', resp: '',
+  next: '', resp: '', mine: false,
 };
 const FX = { sumOpen: true, mode: 'jornada', gran: 'dia', offset: 0, limit: 300, showDone: false, sort: 'sla', filtersOpen: false, cell: null };
 try { FX.gran = localStorage.getItem('flow:gran') || 'dia'; FX.sumOpen = localStorage.getItem('flow:sum') !== 'false'; } catch (_) { /* ignora */ }
@@ -35,12 +35,13 @@ function filteredDoctors() {
       if (F.next === 'ate_hoje' && n > 0) return false;
       if (F.next === 'semana' && (n < 0 || n > 7)) return false;
     }
+    if (F.mine && d.created_by !== S.user.id) return false;
     if (F.resp && (F.resp === 'me' ? d.proximo_responsavel_id !== S.user.id : d.proximo_responsavel_id !== F.resp)) return false;
     return true;
   });
 }
 function activeFilterCount() {
-  return [F.hospitals.length, F.setor, F.estado, F.stage, F.disc, F.statusEsp, F.app, F.procuracao, F.priority, F.slaVencido, F.next, F.resp].filter(Boolean).length;
+  return [F.hospitals.length, F.setor, F.estado, F.stage, F.disc, F.statusEsp, F.app, F.procuracao, F.priority, F.slaVencido, F.next, F.resp, F.mine].filter(Boolean).length;
 }
 
 // ================= estrutura da tela =================
@@ -173,6 +174,7 @@ function buildFilters() {
     <select id="f-estado"><option value="">UF: todas</option>${estados.map((s) => opt(s, s, F.estado)).join('')}</select>
     <select id="f-next"><option value="">Próxima ação: todas</option>${opt('ate_hoje', 'Hoje e atrasadas', F.next)}${opt('atrasada', 'Atrasadas', F.next)}${opt('hoje', 'Para hoje', F.next)}${opt('semana', 'Nos próximos 7 dias', F.next)}${opt('sem', 'Sem próxima ação', F.next)}</select>
     <select id="f-resp"><option value="">Responsável: qualquer</option>${opt('me', 'Eu', F.resp)}${Object.values(S.profiles).filter((p) => p.ativo && p.user_id !== S.user.id).map((p) => opt(p.user_id, p.display_name, F.resp)).join('')}</select>
+    <label class="small" style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="f-mine" ${F.mine ? 'checked' : ''}> Cadastrados por mim</label>
     <select id="f-sla"><option value="">SLA: qualquer</option>${opt('1', 'Só SLA vencido', F.slaVencido ? '1' : '')}</select>
     <label class="small" style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="f-done" ${FX.showDone ? 'checked' : ''}> Mostrar encerrados (aprovados/reprovados)</label>
     <button id="f-clear">Limpar filtros</button>`;
@@ -182,8 +184,9 @@ function buildFilters() {
   bind('#f-next', 'next'); bind('#f-resp', 'resp');
   $('#f-sla').onchange = (e) => { F.slaVencido = !!e.target.value; refreshFluxo(); };
   $('#f-done').onchange = (e) => { FX.showDone = e.target.checked; refreshFluxo(); };
+  $('#f-mine').onchange = (e) => { F.mine = e.target.checked; refreshFluxo(); };
   $('#f-clear').onclick = () => {
-    Object.assign(F, { hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '' });
+    Object.assign(F, { hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '', mine: false });
     buildFilters(); refreshFluxo();
   };
   $('#f-hosp-btn').onclick = (e) => { e.stopPropagation(); const p = $('#f-hosp-pop'); p.hidden = !p.hidden; if (!p.hidden) renderHospPop(); };
@@ -373,6 +376,7 @@ function renderCellChip() {
   if (F.estado) chip(`UF: <b>${esc(F.estado)}</b>`, 'estado');
   if (F.search) chip(`Busca: <b>${esc(F.search)}</b>`, 'search');
   if (F.next) chip(`Próxima ação: <b>${esc({ ate_hoje: 'hoje e atrasadas', atrasada: 'atrasadas', hoje: 'para hoje', semana: 'próximos 7 dias', sem: 'sem próxima ação' }[F.next])}</b>`, 'next');
+  if (F.mine) chip('<b>Cadastrados por mim</b>', 'mine');
   if (F.resp) chip(`Responsável: <b>${esc(F.resp === 'me' ? 'eu' : respName(F.resp))}</b>`, 'resp');
   box.hidden = !chips.length;
   if (!chips.length) { box.innerHTML = ''; return; }
@@ -384,13 +388,14 @@ function renderCellChip() {
     if (k === 'cell') FX.cell = null;
     else if (k === 'hospitals') F.hospitals = [];
     else if (k === 'slaVencido') F.slaVencido = false;
+    else if (k === 'mine') F.mine = false;
     else { F[k] = ''; if (k === 'search') $('#f-search').value = ''; }
     buildFilters(); refreshFluxo();
   });
   const all = $('#fx-unall', box);
   if (all) all.onclick = () => {
     FX.cell = null; $('#f-search').value = '';
-    Object.assign(F, { search: '', hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '' });
+    Object.assign(F, { search: '', hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '', mine: false });
     buildFilters(); refreshFluxo();
   };
 }
@@ -398,7 +403,7 @@ function renderCellChip() {
 /** Abre o Fluxo já filtrado (usado pelos números clicáveis dos Indicadores). */
 function goFluxoFiltered(patch) {
   FX.cell = null;
-  Object.assign(F, { hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '' }, patch);
+  Object.assign(F, { hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '', mine: false }, patch);
   if ($('#fx-more')) buildFilters();
   go('fluxo');
 }
