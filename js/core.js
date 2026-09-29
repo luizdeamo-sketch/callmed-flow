@@ -251,7 +251,10 @@ $('#btn-forgot').addEventListener('click', async () => {
   const email = $('#login-email').value.trim();
   if (!email) { $('#login-err').textContent = 'Digite seu e-mail acima e clique de novo em "Esqueci minha senha".'; return; }
   const { error } = await sb.auth.resetPasswordForEmail(email, { redirectTo: location.origin + location.pathname });
-  $('#login-err').textContent = error ? error.message : '';
+  $('#login-err').textContent = !error ? ''
+    : error.status === 429 || /rate limit/i.test(error.message)
+      ? 'Limite de e-mails de recuperação atingido. Aguarde cerca de 1 hora e tente de novo (clique uma vez só), ou peça a um administrador uma senha provisória.'
+      : error.message;
   if (!error) toast('Enviamos um link de recuperação para seu e-mail.', 'ok');
 });
 
