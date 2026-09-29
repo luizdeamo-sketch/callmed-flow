@@ -331,3 +331,47 @@ grant execute on function public.flow_is_member(uuid), public.flow_is_admin(uuid
 
 -- migração 3
 grant execute on function public.flow_is_member(uuid), public.flow_is_admin(uuid) to service_role;
+
+-- ---------- migração 4: sugestões de melhoria (igual ao CRM Aliança) + bucket privado de anexos ----------
+create table public.flow_sugestoes (
+  id uuid primary key default gen_random_uuid(),
+  autor_id uuid references auth.users(id) on delete set null,
+  autor text not null default '',
+  texto text not null,
+  origem text not null default 'texto' check (origem in ('texto','voz')),
+  tipo text not null default 'ideia' check (tipo in ('ideia','melhoria','problema')),
+  tela text,
+  prioridade text not null default 'normal' check (prioridade in ('baixa','normal','alta')),
+  status text not null default 'nova' check (status in ('nova','em_analise','aprovada','em_execucao','concluida','rejeitada','depois')),
+  audio_path text,
+  resposta text,
+  historico jsonb not null default '[]'::jsonb,
+  anexos jsonb not null default '[]'::jsonb,
+  created_at timestamptz not null default now(),
+  atualizado_em timestamptz not null default now()
+);
+create index flow_sugestoes_created_idx on public.flow_sugestoes(created_at desc);
+create or replace function public.flow_sugestoes_stamp()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is not null then
+    new.autor_id := auth.uid();
+    new.autor := coalesce((select nullif(display_name,'') from public.flow_profiles where user_id = auth.uid()), 'Usuário');
+  end if;
+  return new;
+end $$;
+create trigger flow_sugestoes_stamp before insert on public.flow_sugestoes for each row execute function public.flow_sugestoes_stamp();
+create or replace function public.flow_sugestoes_touch()
+returns trigger language plpgsql set search_path = public as $$
+begin new.atualizado_em := now(); new.autor := old.autor; new.autor_id := old.autor_id; new.created_at := old.created_at; return new; end $$;
+create trigger flow_sugestoes_touch before update on public.flow_sugestoes for each row execute function public.flow_sugestoes_touch();
+revoke execute on function public.flow_sugestoes_stamp(), public.flow_sugestoes_touch() from public, anon, authenticated;
+alter table public.flow_sugestoes enable row level security;
+create policy flow_sug_sel on public.flow_sugestoes for select to authenticated using (public.flow_is_member());
+create policy flow_sug_ins on public.flow_sugestoes for insert to authenticated with check (public.flow_is_member());
+create policy flow_sug_upd on public.flow_sugestoes for update to authenticated using (public.flow_is_member()) with check (public.flow_is_member());
+create policy flow_sug_del on public.flow_sugestoes for delete to authenticated using (public.flow_is_admin());
+insert into storage.buckets (id, name, public, file_size_limit) values ('flow-docs', 'flow-docs', false, 26214400) on conflict (id) do nothing;
+create policy flow_docs_sel on storage.objects for select to authenticated using (bucket_id = 'flow-docs' and public.flow_is_member());
+create policy flow_docs_ins on storage.objects for insert to authenticated with check (bucket_id = 'flow-docs' and public.flow_is_member());
+create policy flow_docs_del on storage.objects for delete to authenticated using (bucket_id = 'flow-docs' and public.flow_is_admin());

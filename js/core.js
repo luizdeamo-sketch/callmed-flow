@@ -371,7 +371,7 @@ function subscribeNotifs() {
 
 // ---------- navegação ----------
 const VIEWS = {};
-const VIEW_TITLES = { fluxo: 'Fluxo', medico: 'Médico', indicadores: 'Indicadores', rqe: 'RQE', relatorios: 'Relatórios', auditoria: 'Auditoria', usuarios: 'Administração' };
+const VIEW_TITLES = { fluxo: 'Fluxo', medico: 'Médico', indicadores: 'Indicadores', sugestoes: 'Sugestões', rqe: 'RQE', relatorios: 'Relatórios', auditoria: 'Auditoria', usuarios: 'Administração' };
 let currentView = 'fluxo';
 function go(view) {
   currentView = view;

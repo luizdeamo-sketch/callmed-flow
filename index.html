@@ -353,6 +353,32 @@
   .panel{ box-shadow:none;}
   .ind-bar{ height:7px; background:#eceef6; border-radius:99px; overflow:hidden; margin-top:4px;} .ind-bar div{ height:100%; border-radius:99px;}
 
+  /* sugestões (igual ao Aliança) */
+  #sg-text{ width:100%; border:1px solid var(--border); border-radius:var(--radius-sm); padding:10px 12px; font-size:14px; font-family:inherit; resize:vertical;}
+  #sg-text.over{ border-color:var(--brand); background:var(--brand-soft);}
+  .sg-row{ display:flex; gap:8px; align-items:center; flex-wrap:wrap;}
+  .sg-row select{ border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 9px; font-size:12.5px; background:var(--surface);}
+  #sg-mic.rec{ background:var(--red); color:#fff; border-color:var(--red);}
+  .sg-chip{ border:1px solid var(--border); background:var(--surface); border-radius:999px; padding:5px 12px; font-size:12px; cursor:pointer; color:var(--ink-soft);}
+  .sg-chip b{ color:var(--c,var(--brand));}
+  .sg-chip.on{ background:var(--c,var(--brand)); color:#fff; border-color:var(--c,var(--brand));} .sg-chip.on b{ color:#fff;}
+  .sg-card{ background:var(--surface); border:1px solid var(--border); border-radius:var(--radius-md); padding:14px 16px; margin-bottom:10px;}
+  .sg-top{ display:flex; align-items:center; gap:8px; flex-wrap:wrap; margin-bottom:8px;} .sg-meta{ font-size:11.5px; color:var(--ink-faint);}
+  .sg-status{ color:#fff; border-radius:999px; padding:2px 11px; font-size:11.5px; font-weight:600;}
+  .sg-text{ font-size:13.5px; line-height:1.55;} .sg-audio{ margin-top:8px; font-size:12.5px;} .sg-audio a{ color:var(--brand); font-weight:600;}
+  .sg-resp{ margin-top:8px; background:var(--green-soft); border-radius:var(--radius-sm); padding:8px 12px; font-size:12.5px;}
+  .sg-actions{ display:flex; gap:8px; margin-top:10px; align-items:center;} .sg-hist{ margin-top:8px;}
+  .sg-hist .rec{ border:1px solid var(--border); border-radius:var(--radius-sm); padding:8px 11px; margin-bottom:6px; font-size:12.5px; background:var(--surface-2);}
+  .sg-hist .rec .k{ color:var(--ink-faint); font-family:'IBM Plex Mono',monospace; font-size:10.5px; margin-right:6px;}
+  .sg-files{ display:flex; flex-wrap:wrap; gap:8px; margin-top:8px;}
+  .sg-fchip{ display:flex; align-items:center; gap:8px; border:1px solid var(--border); border-radius:var(--radius-sm); padding:4px 8px; font-size:12px; background:var(--surface-2);}
+  .sg-fchip img{ width:38px; height:38px; object-fit:cover; border-radius:5px;} .sg-fchip .nm{ max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  .sg-fchip button{ border:none; background:transparent; cursor:pointer; color:var(--ink-faint);}
+  .sg-atts{ display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:center;}
+  .sg-thumb{ max-width:220px; max-height:150px; border:1px solid var(--border); border-radius:8px; display:block; background:#f2f3f9; min-width:60px; min-height:40px;}
+  .sg-file{ border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; font-size:12.5px; color:var(--brand); text-decoration:none; font-weight:600;}
+  .dz{ border:2px dashed #c9cff0; background:var(--brand-soft); border-radius:var(--radius-md); padding:16px; text-align:center; color:var(--ink-soft); font-size:13px; cursor:pointer;}
+  .dz:hover, .dz.over{ border-color:var(--brand); color:var(--brand);}
   @media (max-width: 900px){ .pv-grid{ grid-template-columns:1fr;} }
   @media (max-width: 760px){
     .op-top{ padding:12px;} .op-filters input{ width:100%;}
@@ -435,6 +461,7 @@
     <button class="nav-btn" data-view="rqe" title="Solicitações de RQE">🎓<span>RQE</span></button>
     <button class="nav-btn" data-view="relatorios" title="Relatórios e exportação">📑<span>Relatórios</span></button>
     <button class="nav-btn" data-view="auditoria" title="Quem fez o quê, e quando">🕓<span>Auditoria</span></button>
+    <button class="nav-btn" data-view="sugestoes" title="Sugestões de melhoria do sistema">💡<span>Sugestões</span></button>
     <button class="nav-btn" data-view="usuarios" title="Usuários, hospitais e migração" id="rail-usuarios" hidden>👥<span>Admin</span></button>
   </nav>
 
@@ -445,6 +472,7 @@
     <section id="view-rqe" class="view pgview"></section>
     <section id="view-relatorios" class="view pgview"></section>
     <section id="view-auditoria" class="view pgview"></section>
+    <section id="view-sugestoes" class="view pgview"></section>
     <section id="view-usuarios" class="view pgview"></section>
   </div>
 </div>
@@ -452,12 +480,13 @@
 <div id="modal-root"></div>
 <div id="toasts"></div>
 
-<script src="config.js?v=20260929164829"></script>
-<script src="js/core.js?v=20260929164829"></script>
-<script src="js/fluxo.js?v=20260929164829"></script>
-<script src="js/doctor.js?v=20260929164829"></script>
-<script src="js/rqe.js?v=20260929164829"></script>
-<script src="js/reports.js?v=20260929164829"></script>
-<script src="js/admin.js?v=20260929164829"></script>
+<script src="config.js?v=20260929165708"></script>
+<script src="js/core.js?v=20260929165708"></script>
+<script src="js/fluxo.js?v=20260929165708"></script>
+<script src="js/doctor.js?v=20260929165708"></script>
+<script src="js/rqe.js?v=20260929165708"></script>
+<script src="js/reports.js?v=20260929165708"></script>
+<script src="js/sugestoes.js?v=20260929165708"></script>
+<script src="js/admin.js?v=20260929165708"></script>
 </body>
 </html>
