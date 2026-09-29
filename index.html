@@ -297,6 +297,15 @@
   .op-chip{ display:inline-flex; align-items:center; gap:8px; background:var(--brand-soft); color:var(--ink); border-radius:999px; padding:4px 6px 4px 12px; font-size:12px;}
   .op-chip button{ border:none; background:var(--brand); color:#fff; border-radius:50%; width:20px; height:20px; padding:0; font-size:10px; cursor:pointer;}
   .op-countrow{ background:#f7f8fc;}
+  .hbar.clk{ cursor:pointer; border-radius:6px;} .hbar.clk:hover{ background:var(--brand-soft);}
+  #fx-chip{ gap:8px;}
+  .kanban-col.closed{ width:130px; flex:0 0 130px; background:var(--surface);}
+  .kanban-col.closed .kanban-col-head{ border-radius:var(--radius-md) var(--radius-md) 0 0;}
+  .closed-body{ flex:1; display:flex; flex-direction:column; align-items:center; justify-content:center; gap:4px; padding:18px 8px; text-align:center; min-height:200px; color:var(--ink-faint);}
+  .closed-body b{ font-family:'Poppins',sans-serif; font-size:1.4rem; color:var(--ink-soft);}
+  .closed-body span{ font-size:11px; font-family:'IBM Plex Mono',monospace; text-transform:uppercase;}
+  .closed-body em{ font-size:11.5px; margin-top:10px; border:1px dashed var(--border); border-radius:8px; padding:10px 6px; font-style:normal;}
+  .kanban-col.closed.drop .closed-body em{ border-color:var(--brand); color:var(--brand);}
   .op-countrow .op-left{ background:#f7f8fc; cursor:default;}
   .op-countrow:hover .op-left{ background:#f7f8fc;}
   .op-dot{ width:9px; height:9px; border-radius:50%; flex:none;}
