@@ -401,6 +401,8 @@ async function startApp() {
   $('#view-fluxo').innerHTML = '<div class="op-more">Carregando…</div>'; delete $('#view-fluxo').dataset.built;
   try { await loadCore(); } catch (err) { toast('Erro ao carregar dados: ' + err.message, 'err'); return; }
   $('#rail-usuarios').hidden = !S.isAdmin;
+  $('#who-email').textContent = S.user.email || '';
+  $('#btn-backup').hidden = !S.isAdmin;
   loadNotifs();
   subscribeNotifs();
   let v = 'fluxo';
@@ -410,6 +412,29 @@ async function startApp() {
   // atualização automática a cada 5 min com a aba visível
   setInterval(() => { if (document.visibilityState === 'visible' && !document.querySelector('.modal-bg')) reloadAll(true); }, 5 * 60 * 1000);
 }
+
+// ---------- backup (admin): todos os dados do Flow num Excel ----------
+$('#btn-backup').onclick = async () => {
+  const btn = $('#btn-backup');
+  btn.disabled = true; btn.textContent = 'Gerando...';
+  try {
+    const [acts, docs, sugs] = await Promise.all([
+      fetchAll('flow_activities', '*', { order: 'created_at', asc: true }),
+      fetchAll('flow_doctor_documents', '*', { order: 'doctor_id' }),
+      fetchAll('flow_sugestoes', '*'),
+    ]);
+    const X = await loadXlsx();
+    const wb = X.utils.book_new();
+    const byId = Object.fromEntries(S.doctors.map((d) => [d.id, d]));
+    X.utils.book_append_sheet(wb, X.utils.json_to_sheet(S.doctors.map((d) => ({ ...d, setores: (d.setores || []).join(', '), etapa: stageLabel(d.stage) }))), 'Médicos');
+    X.utils.book_append_sheet(wb, X.utils.json_to_sheet(acts.map((a) => ({ data: a.created_at, medico: byId[a.doctor_id]?.name || '', hospital: byId[a.doctor_id]?.hospital || '', tipo: a.type, descricao: a.description, por: a.created_by_name }))), 'Histórico');
+    X.utils.book_append_sheet(wb, X.utils.json_to_sheet(docs.map((x) => ({ medico: byId[x.doctor_id]?.name || '', hospital: byId[x.doctor_id]?.hospital || '', documento: x.document_name, status: x.status, atualizado: x.updated_at }))), 'Documentos');
+    X.utils.book_append_sheet(wb, X.utils.json_to_sheet(sugs.map((x) => ({ data: x.created_at, autor: x.autor, tipo: x.tipo, tela: x.tela, status: x.status, texto: x.texto, resposta: x.resposta }))), 'Sugestões');
+    X.writeFile(wb, `backup_callmed_flow_${new Date().toISOString().slice(0, 10)}.xlsx`);
+    toast('Backup baixado', 'ok');
+  } catch (e) { toast('Erro no backup: ' + e.message, 'err'); }
+  btn.disabled = false; btn.textContent = '⬇ Backup';
+};
 
 // ---------- exportação ----------
 function downloadCsv(filename, header, rows) {

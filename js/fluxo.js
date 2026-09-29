@@ -5,8 +5,8 @@ const F = {
   search: '', hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false,
   next: '', resp: '',
 };
-const FX = { mode: 'jornada', gran: 'dia', offset: 0, limit: 300, showDone: false, sort: 'sla', filtersOpen: false, cell: null };
-try { FX.gran = localStorage.getItem('flow:gran') || 'dia'; } catch (_) { /* ignora */ }
+const FX = { sumOpen: true, mode: 'jornada', gran: 'dia', offset: 0, limit: 300, showDone: false, sort: 'sla', filtersOpen: false, cell: null };
+try { FX.gran = localStorage.getItem('flow:gran') || 'dia'; FX.sumOpen = localStorage.getItem('flow:sum') !== 'false'; } catch (_) { /* ignora */ }
 try { FX.mode = localStorage.getItem('flow:mode') || 'jornada'; } catch (_) { /* ignora */ }
 const colLimit = {}; // etapa -> quantos cards mostrar no Kanban
 let STAGE_EV = null;  // histórico de etapas por médico (para a Jornada)
@@ -50,8 +50,8 @@ function renderFluxo() {
     root.dataset.built = '1';
     root.innerHTML = `
       <div class="op-top">
-        <div class="op-kpis" id="fx-kpis"></div>
         <div class="op-filters">
+          <span id="fx-kpis" class="op-kpis" style="display:contents"></span>
           <input id="f-search" placeholder="Buscar por nome, CRM, CPF, hospital ou telefone...">
           <div style="position:relative" id="f-hosp-wrap"><div id="fx-hosp-top" style="display:contents"></div></div>
           <button id="f-toggle">⚙ Filtros<span id="f-count" class="op-fcount" hidden></span></button>
@@ -63,9 +63,10 @@ function renderFluxo() {
           </div>
           <div class="seg-toggle" id="fx-gran" title="Resumo por dia ou por mês"><button data-gran="dia">Dia</button><button data-gran="mes">Mês</button></div>
           <span style="flex:1"></span>
+          <button class="icon-a" id="fx-hot" title="🔥 Prioridades da semana — quem cobrar primeiro">🔥</button>
           <button class="icon-a" id="fx-hoje" title="Hoje — o que preciso fazer" style="position:relative">☀️<span class="badge-dot" id="fx-hoje-n" hidden></span></button>
           <button class="icon-a" id="fx-msg" title="Disparar cobranças / avisos">✉️</button>
-          <button class="icon-a" id="fx-export" title="Exportar os médicos filtrados (CSV)">⬇</button>
+          <button class="icon-a" id="fx-export" title="Exportar os médicos filtrados (você escolhe as colunas)">⬇</button>
           <button class="icon-a primary" id="fx-new" title="Novo médico">＋</button>
         </div>
         <div class="op-filters" id="fx-chip" hidden></div>
@@ -93,7 +94,8 @@ function renderFluxo() {
     $('#fx-msg').onclick = () => openMessages();
     $('#fx-hoje').onclick = () => openHoje();
     $('#fx-new').onclick = () => openNewDoctor();
-    $('#fx-export').onclick = exportFiltered;
+    $('#fx-export').onclick = exportDialog;
+    $('#fx-hot').onclick = openPrioridades;
     buildFilters();
     document.addEventListener('click', (e) => { const p = $('#f-hosp-pop'); if (p && !e.target.closest('#f-hosp-wrap')) p.hidden = true; });
   }
@@ -139,7 +141,7 @@ function renderKpis() {
     <span class="op-kpi"><b>${pct}%</b> SLA cumprido</span>
     <span class="op-kpi clk bad ${F.next === 'ate_hoje' && F.resp === 'me' ? 'on' : ''}" data-k="minhas" title="Minhas ações de hoje e atrasadas"><b>${mine.late + mine.hoje}</b> minhas ações p/ hoje</span>
     <span class="op-kpi clk ${F.next === 'sem' ? 'on' : ''}" data-k="semacao" style="background:var(--amber-soft)" title="Médicos em andamento sem próxima ação definida"><b style="color:var(--amber-ink)">⚠ ${team.sem}</b> sem próxima ação</span>
-    ${n !== all.length ? `<span class="op-kpi" style="background:var(--amber-soft)"><b style="color:var(--amber-ink)">${n}</b> no filtro</span>` : ''}`;
+    <span class="op-kpi" style="${n !== all.length ? 'background:var(--amber-soft)' : ''}">exibindo <b style="${n !== all.length ? 'color:var(--amber-ink)' : ''}">${n}</b></span>`;
   $$('#fx-kpis [data-k]').forEach((k) => k.onclick = () => {
     const v = k.dataset.k;
     if (v === 'aprovado') F.stage = F.stage === 'aprovado' ? '' : 'aprovado';
@@ -210,16 +212,84 @@ function syncFilterWidgets() {
   $('#f-stage').value = F.stage; $('#f-prio').value = F.priority; $('#f-sla').value = F.slaVencido ? '1' : '';
 }
 
-function exportFiltered() {
-  const list = filteredDoctors();
-  downloadCsv(`medicos_flow_${new Date().toISOString().slice(0, 10)}.csv`,
-    ['Médico', 'Hospital', 'Setores', 'CRM', 'CPF', 'WhatsApp', 'Etapa', 'Prioridade', 'Entrada', 'SLA', 'Próxima ação', 'Data da ação', 'Responsável', 'Formação', 'DISC', 'APP', 'Procuração', 'Doc. pendente', 'Docs %'],
-    list.map((d) => {
-      const s = FINAL_STAGES.includes(d.stage) ? null : doctorSla(d);
-      return [d.name, d.hospital, (d.setores || []).join(', '), d.crm, d.cpf, d.whatsapp, stageLabel(d.stage), d.priority, fmtDate(d.entry_date),
-        s ? (s.status === 'urgent' ? 'Vencido' : fmtRemaining(s.remaining)) : '—', d.proxima_acao || '', d.proxima_data ? fmtYmd(d.proxima_data) : '', d.proxima_acao ? respName(d.proximo_responsavel_id) : '', d.status_especialidade, d.disc, d.app ? 'Sim' : 'Não', d.procuracao ? 'Sim' : 'Não', d.doc_pendente, S.docProgress[d.id] || 0];
-    }));
-  toast(`${list.length} médico(s) exportado(s)`, 'ok');
+const EXPORT_COLS = [
+  ['name', 'Médico', (d) => d.name], ['hospital', 'Hospital', (d) => d.hospital], ['setores', 'Setores', (d) => (d.setores || []).join(', ')],
+  ['crm', 'CRM', (d) => d.crm], ['cpf', 'CPF', (d) => d.cpf], ['whatsapp', 'WhatsApp', (d) => d.whatsapp], ['estado', 'UF', (d) => d.estado],
+  ['stage', 'Etapa', (d) => stageLabel(d.stage)], ['dias', 'Dias no fluxo', (d) => Math.floor((Date.now() - new Date(d.entry_date)) / 864e5) + 1],
+  ['sla', 'SLA', (d) => { if (FINAL_STAGES.includes(d.stage)) return '—'; const s = doctorSla(d); return s.status === 'urgent' ? 'Vencido' : fmtRemaining(s.remaining); }],
+  ['priority', 'Prioridade', (d) => PRIORITIES[d.priority] || d.priority], ['entry', 'Entrada', (d) => fmtDate(d.entry_date)],
+  ['acao', 'Próxima ação', (d) => d.proxima_acao || ''], ['acao_data', 'Data da ação', (d) => (d.proxima_data ? fmtYmd(d.proxima_data) : '')],
+  ['acao_resp', 'Responsável', (d) => (d.proxima_acao ? respName(d.proximo_responsavel_id) : '')],
+  ['status_esp', 'Formação', (d) => d.status_especialidade], ['rqe', 'RQE', (d) => d.rqe], ['disc', 'DISC', (d) => DISC_LABEL[d.disc] || ''],
+  ['app', 'APP', (d) => (d.app ? 'Sim' : 'Não')], ['proc', 'Procuração', (d) => (d.procuracao ? 'Sim' : 'Não')], ['link', 'Link enviado', (d) => (d.link_enviado ? 'Sim' : 'Não')],
+  ['docs', 'Docs %', (d) => S.docProgress[d.id] || 0], ['doc_pend', 'Doc. pendente', (d) => d.doc_pendente],
+  ['cobranca', 'Cobrança', (d) => d.cobranca], ['obs', 'Observações', (d) => d.observations],
+];
+function exportDialog() {
+  let sel;
+  try { sel = JSON.parse(localStorage.getItem('flow:exportcols') || 'null'); } catch (_) { sel = null; }
+  sel = new Set(sel || ['name', 'hospital', 'setores', 'crm', 'whatsapp', 'stage', 'sla', 'acao', 'acao_data', 'acao_resp', 'docs']);
+  const n = filteredDoctors().length;
+  const m = openModal(`
+    <div class="modal-head"><div><h2>⬇ Exportar médicos</h2><div class="om-sub">${n} médico(s) do filtro atual · escolha as colunas</div></div><button class="x" data-close>✕</button></div>
+    <div class="modal-body"><div class="checks" id="ex-cols">${EXPORT_COLS.map(([k, l]) => `<label class="${sel.has(k) ? 'on' : ''}"><input type="checkbox" value="${k}" ${sel.has(k) ? 'checked' : ''}> ${esc(l)}</label>`).join('')}</div>
+      <div class="actions-row"><button class="btn-ghost" id="ex-all">Marcar todas</button><button class="btn-ghost" id="ex-none">Desmarcar todas</button></div></div>
+    <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-line" id="ex-csv">CSV</button><button class="btn btn-primary" id="ex-xlsx">Excel (.xlsx)</button></div>`);
+  const el = m.el;
+  const sync = () => $$('#ex-cols input', el).forEach((c) => c.parentElement.classList.toggle('on', c.checked));
+  $$('#ex-cols input', el).forEach((c) => c.onchange = sync);
+  $('#ex-all', el).onclick = () => { $$('#ex-cols input', el).forEach((c) => { c.checked = true; }); sync(); };
+  $('#ex-none', el).onclick = () => { $$('#ex-cols input', el).forEach((c) => { c.checked = false; }); sync(); };
+  const go = async (kind) => {
+    const keys = $$('#ex-cols input:checked', el).map((c) => c.value);
+    if (!keys.length) return toast('Escolha pelo menos uma coluna.', 'err');
+    try { localStorage.setItem('flow:exportcols', JSON.stringify(keys)); } catch (_) { /* ignora */ }
+    const cols = EXPORT_COLS.filter((c) => keys.includes(c[0]));
+    const rows = filteredDoctors().map((d) => cols.map((c) => c[2](d) ?? ''));
+    const nome = `medicos_flow_${new Date().toISOString().slice(0, 10)}`;
+    if (kind === 'csv') downloadCsv(nome + '.csv', cols.map((c) => c[1]), rows);
+    else {
+      try { const X = await loadXlsx(); const wb = X.utils.book_new(); X.utils.book_append_sheet(wb, X.utils.aoa_to_sheet([cols.map((c) => c[1]), ...rows]), 'Médicos'); X.writeFile(wb, nome + '.xlsx'); } catch (e) { return toast('Erro ao gerar Excel: ' + e.message, 'err'); }
+    }
+    m.close(); toast(`${rows.length} médico(s) exportado(s)`, 'ok');
+  };
+  $('#ex-csv', el).onclick = () => go('csv');
+  $('#ex-xlsx', el).onclick = () => go('xlsx');
+}
+
+// ---------- 🔥 Prioridades da semana (equivalente ao Call Hot do Aliança) ----------
+function openPrioridades() {
+  const rows = S.doctors.filter((d) => !FINAL_STAGES.includes(d.stage)).map((d) => {
+    const why = []; let sc = 0;
+    const add = (n, t) => { sc += n; why.push(t); };
+    if (d.priority === 'urgente') add(40, 'urgente');
+    if (d.priority === 'hospital_novo') add(35, 'hospital novo (SLA 3h)');
+    const s = doctorSla(d);
+    if (s.status === 'urgent') add(Math.min(30, 10 + Math.round(-s.remaining / 24) * 2), `SLA vencido há ${Math.max(1, Math.round(-s.remaining / 24))}d úteis`);
+    else if (s.status === 'warning') add(15, 'SLA vencendo');
+    const n = daysTo(d.proxima_data);
+    if (d.proxima_acao && n !== null) { if (n < 0) add(15, `ação atrasada ${-n}d`); else if (n === 0) add(10, 'ação para hoje'); else add(-20, 'já agendado'); }
+    if (!d.proxima_acao) add(12, 'sem próxima ação');
+    const docs = S.docProgress[d.id] || 0;
+    if (docs >= 80 && docs < 100) add(10, `documentação ${docs}% — falta pouco`);
+    if (d.doc_pendente) add(5, 'doc. pendente anotado');
+    return { d, sc, why };
+  }).filter((r) => r.sc > 0).sort((a, b) => b.sc - a.sc).slice(0, 40);
+  const m = openModal(`
+    <div class="modal-head"><div><h2>🔥 Prioridades da semana</h2><div class="om-sub">Lista calculada automaticamente — quem cobrar primeiro (urgência, SLA, ações atrasadas e quem está quase pronto).</div></div><button class="x" data-close>✕</button></div>
+    <div class="modal-body"><table class="t"><thead><tr><th>#</th><th>Médico</th><th>Pontos</th><th>Por quê</th><th>Próxima ação</th><th></th></tr></thead><tbody>
+      ${rows.map((r, i) => `<tr><td>${i + 1}</td><td><a href="#" data-openp="${r.d.id}" style="color:var(--brand);font-weight:600">${esc(r.d.name)}</a><br><small class="muted">${esc(r.d.hospital)} · ${esc(stageLabel(r.d.stage))}</small></td>
+        <td><b>${r.sc}</b></td><td><small>${r.why.map(esc).join(' · ')}</small></td><td><small>${r.d.proxima_acao ? esc(r.d.proxima_acao) + ' ' + fmtYmd(r.d.proxima_data) : '—'}</small></td>
+        <td><button class="btn btn-line btn-sm" data-ch="${r.d.id}">Cobrar hoje</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Nada crítico agora. 👍</td></tr>'}
+    </tbody></table></div>`, { size: 'lg', onClose: () => refreshFluxo() });
+  const byId = (id) => S.doctors.find((x) => x.id === id);
+  $$('[data-openp]', m.el).forEach((a) => a.onclick = (e) => { e.preventDefault(); m.close(); openDoctor(byId(a.dataset.openp)); });
+  $$('[data-ch]', m.el).forEach((b) => b.onclick = async () => {
+    const d = byId(b.dataset.ch);
+    if (await saveNextAction(d, d.proxima_acao || ACAO_POR_ETAPA[d.stage] || 'Outra', ymdToday(), S.user.id, { quiet: true })) {
+      b.textContent = '✔ na sua lista de hoje'; b.disabled = true;
+    }
+  });
 }
 
 // ================= JORNADA (linha do tempo, igual à tela Aliança) =================
@@ -364,8 +434,8 @@ function renderJornada(list) {
   const curIdx = cols.findIndex((c) => c.cur);
   const isSel = (st, c) => FX.cell && FX.cell.stage === st && +FX.cell.s === +c.start && FX.cell.gran === FX.gran;
 
-  const head = `<div class="op-row op-head"><div class="op-left">▾ Resumo ${FX.gran === 'mes' ? 'mensal' : 'diário'}<span class="info-ico" title="Cada número é quantos médicos passaram por aquela etapa naquele ${FX.gran === 'mes' ? 'mês' : 'dia'}. Clique no número para ver só esses médicos na lista.">ⓘ</span></div>
-    <div class="op-right">${cols.map((c, i) => `<div class="op-mh ${c.cur ? 'cur' : ''} ${c.we ? 'we' : ''}" style="left:calc(${i} * var(--dw))">${c.label}<small>${c.sub}</small></div>`).join('')}</div></div>`;
+  const head = `<div class="op-row op-head"><div class="op-left"><span id="fx-sumtoggle" style="cursor:pointer" title="Recolher / abrir o resumo">${FX.sumOpen ? '▾' : '▸'} Resumo ${FX.gran === 'mes' ? 'mensal' : 'diário'}</span><span class="info-ico" title="Cada número é quantos médicos passaram por aquela etapa naquele ${FX.gran === 'mes' ? 'mês' : 'dia'}. Clique no número para ver só esses médicos na lista.">ⓘ</span></div>
+    <div class="op-right">${cols.map((c, i) => `<div class="op-mh ${c.cur ? 'cur' : ''} ${c.we ? 'we' : ''}" style="left:calc(${i} * var(--dw))"><span class="op-mt"><span>${c.label}<small>${c.sub}</small></span>${FX.gran === 'mes' && c.start <= now ? `<button class="op-mtoggle" data-expand="${i}" title="Abrir os dias de ${c.tag}">⤢</button>` : ''}</span></div>`).join('')}</div></div>`;
 
   const sum = `<div class="op-sumbox">${shownStages.map((s) => `<div class="op-sumrow"><div class="op-left ${F.stage === s.id ? 'sel' : ''}" data-sstage="${s.id}" title="${FINAL_STAGES.includes(s.id) ? 'Encerramentos: conta só no dia em que aconteceu' : 'Filtrar por quem está hoje nesta etapa'}"><span class="op-dot" style="background:${esc(s.color)}"></span>${esc(s.label)}<b style="margin-left:auto;font-family:Poppins">${FINAL_STAGES.includes(s.id) ? list.filter((d) => d.stage === s.id && closedInWindow(d)).length : list.filter((d) => d.stage === s.id).length}</b></div>
     <div class="op-right">${counts[s.id].map((n, i) => {
@@ -373,7 +443,7 @@ function renderJornada(list) {
       if (c.start > now) return '';
       return `<div class="op-sumcell ${n ? 'clk' : 'z'} ${isSel(s.id, c) ? 'sel' : ''}" style="left:calc(${i} * var(--dw))" ${n ? `data-cell="${s.id}|${i}" title="${n} médico(s) em ${esc(s.label)} em ${c.tag}"` : ''}>${n || '·'}</div>`;
     }).join('')}</div></div>`).join('')}
-    <div class="op-sumrow"><div class="op-left" id="fx-closed" title="Aprovado ou reprovado encerra o credenciamento — por isso ficam fora da tela" style="color:var(--ink-faint)">✔ Encerrados antes deste período (fora da tela): ${nApr} aprovados · ${nRep} reprovados<span class="btn-ghost" style="margin-left:auto;padding:0">${FX.showDone ? 'ocultar' : 'mostrar'}</span></div><div class="op-right"></div></div></div>`;
+    <div class="op-sumrow"><div class="op-left" id="fx-closed" title="Aprovado ou reprovado encerra o credenciamento — por isso ficam fora da tela" style="color:var(--ink-faint)">✔ Encerrados antes: ${nApr} aprov. · ${nRep} reprov.<span class="btn-ghost" style="margin-left:auto;padding:0">${FX.showDone ? 'ocultar' : 'mostrar'}</span></div><div class="op-right"></div></div></div>`;
 
   const countRow = `<div class="op-row op-countrow"><div class="op-left">${rows.length} de ${list.length} médicos
       <select id="fx-sort" style="margin-left:auto;border:none;background:transparent;font:inherit;color:inherit;text-transform:uppercase;cursor:pointer">
@@ -394,16 +464,16 @@ function renderJornada(list) {
     const todayPos = curIdx >= 0 ? curIdx + (now - cols[curIdx].start) / (cols[curIdx].end - cols[curIdx].start) : -1;
     return `<div class="op-row" data-doc="${d.id}">
       <div class="op-left"><div class="n"><span class="sdot s-${sla ? sla.status : 'none'}"></span>${esc(d.name)}${d.priority === 'urgente' ? '<span class="tagx bad">URG</span>' : d.priority === 'hospital_novo' ? '<span class="tagx warn">3h</span>' : ''}</div>
-        <div class="m">${esc(d.hospital)}${(d.setores || []).length ? ' · ' + esc(d.setores.join(', ')) : ''} · ${daysIn(d)}d${sla ? ` · <span style="color:${sla.status === 'urgent' ? 'var(--red)' : sla.status === 'warning' ? 'var(--amber)' : 'inherit'}">${sla.status === 'urgent' ? 'SLA vencido' : 'SLA ' + fmtRemaining(sla.remaining)}</span>` : ` · ${esc(stageLabel(d.stage))}`}${nextInline(d)}</div></div>
+        <div class="m">${esc(d.hospital)}${d.crm ? ' · ' + esc(d.crm) : ''}${d.status_especialidade ? ' · ' + esc(d.status_especialidade) : ''}${(d.setores || []).length ? ' · ' + esc(d.setores.join(', ')) : ''} · ${daysIn(d)}d${sla ? ` · <span style="color:${sla.status === 'urgent' ? 'var(--red)' : sla.status === 'warning' ? 'var(--amber)' : 'inherit'}">${sla.status === 'urgent' ? 'SLA vencido' : 'SLA ' + fmtRemaining(sla.remaining)}</span>` : ` · ${esc(stageLabel(d.stage))}`}${nextInline(d)}</div></div>
       <div class="op-right">${todayPos >= 0 ? `<div class="op-today" style="left:calc(${todayPos} * var(--dw))"></div>` : ''}
         ${segs.map((s) => { const st = stageById(s.st); const w = s.end - s.start + 1; return `<div class="seg" style="left:calc(${s.start} * var(--dw) + 2px);width:calc(${w} * var(--dw) - 4px);background:${esc(st?.color || '#999')}" title="${esc(st?.label || s.st)}">${w >= 2 || FX.gran === 'mes' ? esc(st?.label || '') : ''}</div>`; }).join('')}</div></div>`;
   };
 
-  body.innerHTML = `<div class="op-scroll" style="--ndays:${cols.length};--dw:${FX.gran === 'mes' ? '96px' : '56px'}">${head}${sum}${countRow}${rows.slice(0, FX.limit).map(rowHtml).join('') || '<div class="op-more">Nenhum médico com esses filtros.</div>'}
+  body.innerHTML = `<div class="op-scroll" style="--ndays:${cols.length};--dw:${FX.gran === 'mes' ? '96px' : '56px'}"><div class="op-sticky">${head}${FX.sumOpen ? sum : ''}</div>${countRow}${rows.slice(0, FX.limit).map(rowHtml).join('') || '<div class="op-more">Nenhum médico com esses filtros.</div>'}
     ${rows.length > FX.limit ? `<div class="op-more"><button class="btn btn-line btn-sm" id="fx-morerows">Mostrar mais ${Math.min(300, rows.length - FX.limit)} de ${rows.length - FX.limit}</button></div>` : `<div class="op-more">Fim da lista (${rows.length})</div>`}</div>`;
 
   $$('#fx-body [data-doc]').forEach((r) => r.onclick = () => openDoctor(S.doctors.find((x) => x.id === r.dataset.doc)));
-  $('#fx-closed').onclick = () => { FX.showDone = !FX.showDone; buildFilters(); refreshFluxo(); };
+  const fxc = $('#fx-closed'); if (fxc) fxc.onclick = () => { FX.showDone = !FX.showDone; buildFilters(); refreshFluxo(); };
   $$('#fx-body [data-sstage]').forEach((c) => c.onclick = () => { F.stage = F.stage === c.dataset.sstage ? '' : c.dataset.sstage; FX.cell = null; buildFilters(); refreshFluxo(); });
   $$('#fx-body [data-cell]').forEach((c) => c.onclick = () => {
     const [stage, i] = c.dataset.cell.split('|');
@@ -416,6 +486,16 @@ function renderJornada(list) {
   $('#fx-sort').onclick = (e) => e.stopPropagation();
   $('#fx-sort').onchange = (e) => { FX.sort = e.target.value; refreshFluxo(); };
   const mr = $('#fx-morerows'); if (mr) mr.onclick = () => { FX.limit += 300; refreshFluxo(); };
+  $('#fx-sumtoggle').onclick = () => { FX.sumOpen = !FX.sumOpen; try { localStorage.setItem('flow:sum', FX.sumOpen); } catch (_) { /* ignora */ } refreshFluxo(); };
+  $$('#fx-body [data-expand]').forEach((b) => b.onclick = (e) => {
+    e.stopPropagation();
+    const c = cols[+b.dataset.expand];
+    const t = new Date(); t.setHours(0, 0, 0, 0);
+    FX.gran = 'dia'; FX.cell = null;
+    FX.offset = Math.round((c.start - t) / 864e5) + 17; // janela diária começa no dia 1 do mês
+    try { localStorage.setItem('flow:gran', 'dia'); } catch (_) { /* ignora */ }
+    refreshFluxo();
+  });
   renderCellChip();
 }
 

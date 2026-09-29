@@ -297,6 +297,17 @@
   .op-chip{ display:inline-flex; align-items:center; gap:8px; background:var(--brand-soft); color:var(--ink); border-radius:999px; padding:4px 6px 4px 12px; font-size:12px;}
   .op-chip button{ border:none; background:var(--brand); color:#fff; border-radius:50%; width:20px; height:20px; padding:0; font-size:10px; cursor:pointer;}
   .op-countrow{ background:#f7f8fc;}
+  .op-sticky{ position:sticky; top:0; z-index:6; background:var(--surface); box-shadow:0 2px 6px -4px rgba(15,18,30,.25);}
+  .op-sticky .op-head{ position:static;}
+  .op-left .n{ text-transform:uppercase; font-weight:700; letter-spacing:.01em;}
+  .op-mt{ display:flex; align-items:center; justify-content:center; gap:5px;}
+  .op-mt > span{ display:flex; flex-direction:column; align-items:center; line-height:1.15;}
+  .op-mtoggle{ border:1px solid var(--border); background:var(--surface); border-radius:5px; width:20px; height:20px; font-size:11px; line-height:1; cursor:pointer; color:var(--ink-soft); padding:0;}
+  .op-mtoggle:hover{ background:var(--brand-soft); color:var(--brand);}
+  .who-email{ font-size:12.5px; color:var(--ink-faint);}
+  .op-top .op-kpi{ white-space:nowrap;}
+  #f-hosp-btn{ border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 10px; font-size:13px; background:var(--surface); color:var(--ink); cursor:pointer; max-width:260px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
+  #f-hosp-btn:hover{ background:var(--brand-soft);}
   .hbar.clk{ cursor:pointer; border-radius:6px;} .hbar.clk:hover{ background:var(--brand-soft);}
   #fx-chip{ gap:8px;}
   .kanban-col.closed{ width:130px; flex:0 0 130px; background:var(--surface);}
@@ -451,6 +462,8 @@
       <span class="hdr-title" id="hdr-title">Fluxo</span><span class="info-ico" tabindex="0" title="Cada card é um médico em um hospital. A Jornada mostra dia a dia em que etapa do credenciamento ele esteve; o Kanban serve para mover de etapa arrastando. Clique no nome para abrir a ficha completa.">ⓘ</span>
     </div>
     <div class="who">
+      <span class="who-email" id="who-email"></span>
+      <button class="icon-btn" id="btn-backup" title="Baixar uma cópia de todos os dados do Flow (Excel)" hidden>⬇ Backup</button>
       <span class="chip" id="who-chip"></span>
       <button class="icon-btn" id="btn-reload" title="Recarregar dados">⟳</button>
       <div style="position:relative">
@@ -486,14 +499,14 @@
 <div id="modal-root"></div>
 <div id="toasts"></div>
 
-<script src="config.js?v=20260929170851"></script>
-<script src="js/core.js?v=20260929170851"></script>
-<script src="js/hoje.js?v=20260929170851"></script>
-<script src="js/fluxo.js?v=20260929170851"></script>
-<script src="js/doctor.js?v=20260929170851"></script>
-<script src="js/rqe.js?v=20260929170851"></script>
-<script src="js/reports.js?v=20260929170851"></script>
-<script src="js/sugestoes.js?v=20260929170851"></script>
-<script src="js/admin.js?v=20260929170851"></script>
+<script src="config.js?v=20260929171435"></script>
+<script src="js/core.js?v=20260929171435"></script>
+<script src="js/hoje.js?v=20260929171435"></script>
+<script src="js/fluxo.js?v=20260929171435"></script>
+<script src="js/doctor.js?v=20260929171435"></script>
+<script src="js/rqe.js?v=20260929171435"></script>
+<script src="js/reports.js?v=20260929171435"></script>
+<script src="js/sugestoes.js?v=20260929171435"></script>
+<script src="js/admin.js?v=20260929171435"></script>
 </body>
 </html>
