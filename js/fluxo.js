@@ -231,11 +231,18 @@ function stageAt(tl, t) {
   for (const e of tl) { if (e.at <= t) st = e.stage; else break; }
   return st;
 }
-/** Etapas em que o médico esteve em algum momento do período [s, e). */
+/** Etapa do médico no fim do período [s, e). Aprovado/reprovado só aparecem no período em que aconteceram:
+ *  depois disso o credenciamento está encerrado e o médico sai da linha do tempo. */
+function stageInPeriod(tl, s, e) {
+  const st = stageAt(tl, new Date(e - 1));
+  if (!st || !FINAL_STAGES.includes(st)) return st;
+  return tl.some((ev) => ev.stage === st && ev.at >= s && ev.at < e) ? st : null;
+}
+/** Etapas em que o médico esteve em algum momento do período [s, e) (encerramento conta só no período em que ocorreu). */
 function stagesDuring(tl, s, e) {
   const out = new Set();
   const first = stageAt(tl, s);
-  if (first) out.add(first);
+  if (first && !FINAL_STAGES.includes(first)) out.add(first);
   for (const ev of tl) if (ev.at >= s && ev.at < e) out.add(ev.stage);
   return out;
 }
@@ -314,10 +321,14 @@ function renderJornada(list) {
   const cellIds = cellFilterIds(list);
   const daysIn = (d) => Math.floor((Date.now() - new Date(d.entry_date)) / 864e5) + 1;
   const slaKey = (d) => (FINAL_STAGES.includes(d.stage) ? 1e9 : doctorSla(d).remaining);
-  const showFinal = (d) => FX.showDone || FINAL_STAGES.includes(F.stage) || !FINAL_STAGES.includes(d.stage);
+  const winS = cols[0].start, winE = cols[cols.length - 1].end;
+  // encerrado (aprovado/reprovado) só aparece se o encerramento caiu dentro do período da tela
+  const closedInWindow = (d) => tls.get(d.id).some((ev) => ev.stage === d.stage && ev.at >= winS && ev.at < winE);
+  const showFinal = (d) => FX.showDone || FINAL_STAGES.includes(F.stage) || !FINAL_STAGES.includes(d.stage) || closedInWindow(d);
   const rows = list.filter((d) => showFinal(d) && (!cellIds || cellIds.has(d.id)));
-  const shownStages = S.stages.filter((s) => FX.showDone || FINAL_STAGES.includes(F.stage) || !FINAL_STAGES.includes(s.id));
-  const nApr = list.filter((d) => d.stage === 'aprovado').length, nRep = list.filter((d) => d.stage === 'reprovado').length;
+  const shownStages = S.stages;
+  const oldClosed = list.filter((d) => FINAL_STAGES.includes(d.stage) && !closedInWindow(d));
+  const nApr = oldClosed.filter((d) => d.stage === 'aprovado').length, nRep = oldClosed.filter((d) => d.stage === 'reprovado').length;
   rows.sort((a, b) => (FX.sort === 'nome' ? a.name.localeCompare(b.name) : FX.sort === 'dias' ? daysIn(b) - daysIn(a) : slaKey(a) - slaKey(b)));
   const curIdx = cols.findIndex((c) => c.cur);
   const isSel = (st, c) => FX.cell && FX.cell.stage === st && +FX.cell.s === +c.start && FX.cell.gran === FX.gran;
@@ -325,13 +336,13 @@ function renderJornada(list) {
   const head = `<div class="op-row op-head"><div class="op-left">▾ Resumo ${FX.gran === 'mes' ? 'mensal' : 'diário'}<span class="info-ico" title="Cada número é quantos médicos passaram por aquela etapa naquele ${FX.gran === 'mes' ? 'mês' : 'dia'}. Clique no número para ver só esses médicos na lista.">ⓘ</span></div>
     <div class="op-right">${cols.map((c, i) => `<div class="op-mh ${c.cur ? 'cur' : ''} ${c.we ? 'we' : ''}" style="left:calc(${i} * var(--dw))">${c.label}<small>${c.sub}</small></div>`).join('')}</div></div>`;
 
-  const sum = `<div class="op-sumbox">${shownStages.map((s) => `<div class="op-sumrow"><div class="op-left ${F.stage === s.id ? 'sel' : ''}" data-sstage="${s.id}" title="Filtrar por quem está hoje nesta etapa"><span class="op-dot" style="background:${esc(s.color)}"></span>${esc(s.label)}<b style="margin-left:auto;font-family:Poppins">${list.filter((d) => d.stage === s.id).length}</b></div>
+  const sum = `<div class="op-sumbox">${shownStages.map((s) => `<div class="op-sumrow"><div class="op-left ${F.stage === s.id ? 'sel' : ''}" data-sstage="${s.id}" title="${FINAL_STAGES.includes(s.id) ? 'Encerramentos: conta só no dia em que aconteceu' : 'Filtrar por quem está hoje nesta etapa'}"><span class="op-dot" style="background:${esc(s.color)}"></span>${esc(s.label)}<b style="margin-left:auto;font-family:Poppins">${FINAL_STAGES.includes(s.id) ? list.filter((d) => d.stage === s.id && closedInWindow(d)).length : list.filter((d) => d.stage === s.id).length}</b></div>
     <div class="op-right">${counts[s.id].map((n, i) => {
       const c = cols[i];
       if (c.start > now) return '';
       return `<div class="op-sumcell ${n ? 'clk' : 'z'} ${isSel(s.id, c) ? 'sel' : ''}" style="left:calc(${i} * var(--dw))" ${n ? `data-cell="${s.id}|${i}" title="${n} médico(s) em ${esc(s.label)} em ${c.tag}"` : ''}>${n || '·'}</div>`;
     }).join('')}</div></div>`).join('')}
-    <div class="op-sumrow"><div class="op-left" id="fx-closed" title="Aprovado ou reprovado encerra o credenciamento — por isso ficam fora da tela" style="color:var(--ink-faint)">✔ Encerrados: ${nApr} aprovados · ${nRep} reprovados<span class="btn-ghost" style="margin-left:auto;padding:0">${FX.showDone ? 'ocultar' : 'mostrar'}</span></div><div class="op-right"></div></div></div>`;
+    <div class="op-sumrow"><div class="op-left" id="fx-closed" title="Aprovado ou reprovado encerra o credenciamento — por isso ficam fora da tela" style="color:var(--ink-faint)">✔ Encerrados antes deste período (fora da tela): ${nApr} aprovados · ${nRep} reprovados<span class="btn-ghost" style="margin-left:auto;padding:0">${FX.showDone ? 'ocultar' : 'mostrar'}</span></div><div class="op-right"></div></div></div>`;
 
   const countRow = `<div class="op-row op-countrow"><div class="op-left">${rows.length} de ${list.length} médicos
       <select id="fx-sort" style="margin-left:auto;border:none;background:transparent;font:inherit;color:inherit;text-transform:uppercase;cursor:pointer">
@@ -343,7 +354,7 @@ function renderJornada(list) {
     const segs = [];
     cols.forEach((c, i) => {
       if (c.start > now) return;
-      const st = stageAt(tl, new Date(Math.min(c.end - 1, now)));
+      const st = stageInPeriod(tl, c.start, new Date(Math.min(+c.end, +now + 1)));
       if (!st) return;
       const last = segs[segs.length - 1];
       if (last && last.st === st && last.end === i - 1) last.end = i; else segs.push({ st, start: i, end: i });
