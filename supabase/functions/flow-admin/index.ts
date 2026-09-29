@@ -39,15 +39,14 @@ Deno.serve(async (req) => {
   const log = (description: string) =>
     admin.from("flow_activities").insert({ type: "admin", description, created_by: callerId, created_by_name: callerProf?.display_name || "Admin" });
 
+  // Busca direta no banco (a listagem do Auth falha se existir alguma conta antiga com token NULL).
   const findAuthUserByEmail = async (email: string) => {
-    for (let page = 1; page < 50; page++) {
-      const { data, error } = await admin.auth.admin.listUsers({ page, perPage: 1000 });
-      if (error) throw error;
-      const hit = data.users.find((u) => (u.email || "").toLowerCase() === email);
-      if (hit) return hit;
-      if (data.users.length < 1000) return null;
-    }
-    return null;
+    const { data: id, error } = await admin.rpc("flow_auth_user_id_by_email", { _email: email });
+    if (error) throw error;
+    if (!id) return null;
+    const { data, error: e2 } = await admin.auth.admin.getUserById(id as string);
+    if (e2) throw e2;
+    return data.user;
   };
 
   try {

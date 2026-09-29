@@ -432,3 +432,11 @@ end $$;
 create trigger flow_doctors_notify_handoff after insert or update of proximo_responsavel_id on public.flow_doctors
   for each row execute function public.flow_doctors_notify_handoff();
 revoke execute on function public.flow_doctors_notify_handoff() from public, anon, authenticated;
+
+-- ---------- migração 8: busca de conta por e-mail (só servidor) — a listagem do Auth quebra com linhas antigas com token NULL ----------
+create or replace function public.flow_auth_user_id_by_email(_email text)
+returns uuid language sql stable security definer set search_path = public, auth as $$
+  select id from auth.users where lower(email) = lower(trim(_email)) limit 1
+$$;
+revoke execute on function public.flow_auth_user_id_by_email(text) from public, anon, authenticated;
+grant execute on function public.flow_auth_user_id_by_email(text) to service_role;
