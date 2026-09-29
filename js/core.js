@@ -113,7 +113,7 @@ function confirmDlg(title, text, { okText = 'Confirmar', danger = false } = {}) 
   return new Promise((resolve) => {
     let answered = false;
     const m = openModal(`
-      <div class="modal-head"><h2>${esc(title)}</h2><button class="x" data-close>×</button></div>
+      <div class="modal-head"><h2>${esc(title)}</h2><button class="x" data-close>✕</button></div>
       <div class="modal-body"><p style="margin:0">${esc(text)}</p></div>
       <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button>
       <button class="btn ${danger ? 'btn-danger' : 'btn-primary'}" id="cf-ok">${esc(okText)}</button></div>`,
@@ -371,11 +371,11 @@ function subscribeNotifs() {
 
 // ---------- navegação ----------
 const VIEWS = {};
-const VIEW_TITLES = { fluxo: 'Fluxo', rqe: 'Solicitação RQE', relatorios: 'Relatórios', timeline: 'Timeline', auditoria: 'Auditoria', usuarios: 'Administração' };
+const VIEW_TITLES = { fluxo: 'Fluxo', medico: 'Médico', indicadores: 'Indicadores', rqe: 'RQE', relatorios: 'Relatórios', auditoria: 'Auditoria', usuarios: 'Administração' };
 let currentView = 'fluxo';
 function go(view) {
   currentView = view;
-  $$('#rail .nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === view));
+  $$('#rail .nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === (view === 'medico' ? 'fluxo' : view)));
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
   $('#hdr-title').textContent = VIEW_TITLES[view];
   try { localStorage.setItem('flow:view', view); } catch (_) { /* ignora */ }
@@ -398,14 +398,14 @@ $('#btn-reload').onclick = () => reloadAll(false);
 async function startApp() {
   showOnly('app');
   $('#who-chip').innerHTML = `${esc(S.profile.display_name || S.user.email)}${S.profile.setor ? `<small>${esc(SETOR_USUARIO[S.profile.setor] || S.profile.setor)}</small>` : ''}`;
-  $('#view-fluxo').innerHTML = '<div class="empty">Carregando…</div>';
+  $('#view-fluxo').innerHTML = '<div class="op-more">Carregando…</div>'; delete $('#view-fluxo').dataset.built;
   try { await loadCore(); } catch (err) { toast('Erro ao carregar dados: ' + err.message, 'err'); return; }
   $('#rail-usuarios').hidden = !S.isAdmin;
   loadNotifs();
   subscribeNotifs();
   let v = 'fluxo';
   try { v = localStorage.getItem('flow:view') || 'fluxo'; } catch (_) { /* ignora */ }
-  if (v === 'usuarios' && !S.isAdmin) v = 'fluxo';
+  if ((v === 'usuarios' && !S.isAdmin) || v === 'medico') v = 'fluxo';
   go(VIEWS[v] ? v : 'fluxo');
   // atualização automática a cada 5 min com a aba visível
   setInterval(() => { if (document.visibilityState === 'visible' && !document.querySelector('.modal-bg')) reloadAll(true); }, 5 * 60 * 1000);

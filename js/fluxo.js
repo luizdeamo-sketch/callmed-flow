@@ -1,17 +1,18 @@
-/* CallMed Flow — tela principal: métricas, filtros, dashboard e Kanban */
+/* CallMed Flow — tela principal no padrão do CRM Aliança: barra de topo, Jornada (linha do tempo) e Kanban; e Indicadores */
 'use strict';
 
 const F = {
   search: '', hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false,
 };
-const colLimit = {}; // etapa -> quantos cards mostrar
-let dashOpen = true;
-try { dashOpen = localStorage.getItem('flow:dash') !== 'false'; } catch (_) { /* ignora */ }
+const FX = { mode: 'jornada', days: 21, offset: 0, limit: 300, showDone: false, sort: 'sla', filtersOpen: false };
+try { FX.mode = localStorage.getItem('flow:mode') || 'jornada'; } catch (_) { /* ignora */ }
+const colLimit = {}; // etapa -> quantos cards mostrar no Kanban
+let STAGE_EV = null;  // histórico de etapas por médico (para a Jornada)
 
 function filteredDoctors() {
   const q = norm(F.search);
   return S.doctors.filter((d) => {
-    if (q && !(norm(d.name).includes(q) || norm(d.crm).includes(q) || norm(d.cpf).includes(q) || norm(d.hospital).includes(q) || norm((d.setores || []).join(' ')).includes(q))) return false;
+    if (q && !(norm(d.name).includes(q) || norm(d.crm).includes(q) || norm(d.cpf).includes(q) || norm(d.hospital).includes(q) || norm(d.whatsapp).includes(q) || norm((d.setores || []).join(' ')).includes(q))) return false;
     if (F.hospitals.length && !F.hospitals.includes(d.hospital)) return false;
     if (F.setor && !(d.setores || []).includes(F.setor)) return false;
     if (F.estado && d.estado !== F.estado) return false;
@@ -25,55 +26,95 @@ function filteredDoctors() {
     return true;
   });
 }
+function activeFilterCount() {
+  return [F.hospitals.length, F.setor, F.estado, F.stage, F.disc, F.statusEsp, F.app, F.procuracao, F.priority, F.slaVencido].filter(Boolean).length;
+}
 
+// ================= estrutura da tela =================
 function renderFluxo() {
   const root = $('#view-fluxo');
   if (!root.dataset.built) {
     root.dataset.built = '1';
     root.innerHTML = `
-      <div class="kpis" id="fx-metrics"></div>
-      <div class="toolbar" id="fx-filters"></div>
-      <div class="collapser" id="fx-dash-toggle"></div>
-      <div id="fx-dash"></div>
-      <div class="kanban-wrap"><div class="kanban-board" id="fx-board"></div></div>`;
-    buildFilters();
-    $('#fx-dash-toggle').onclick = () => {
-      dashOpen = !dashOpen;
-      try { localStorage.setItem('flow:dash', dashOpen); } catch (_) { /* ignora */ }
+      <div class="op-top">
+        <div class="op-kpis" id="fx-kpis"></div>
+        <div class="op-filters">
+          <input id="f-search" placeholder="Buscar por nome, CRM, CPF, hospital ou telefone...">
+          <button id="f-toggle">⚙ Filtros<span id="f-count" class="op-fcount" hidden></span></button>
+          <div class="seg-toggle" id="fx-mode"><button data-mode="jornada">🧭 Jornada</button><button data-mode="kanban">▦ Kanban</button></div>
+          <div class="op-nav-pill" id="fx-nav">
+            <button data-nav="-21" title="Voltar 3 semanas">«</button><button data-nav="-7" title="Voltar 1 semana">‹</button>
+            <span class="rng" id="fx-range"></span>
+            <button data-nav="7" title="Avançar 1 semana">›</button><button data-nav="0" title="Hoje">Hoje</button>
+          </div>
+          <span style="flex:1"></span>
+          <button class="icon-a" id="fx-msg" title="Disparar cobranças / avisos">✉️</button>
+          <button class="icon-a" id="fx-export" title="Exportar os médicos filtrados (CSV)">⬇</button>
+          <button class="icon-a primary" id="fx-new" title="Novo médico">＋</button>
+        </div>
+        <div class="op-filters-more" id="fx-more"></div>
+      </div>
+      <div id="fx-body"></div>`;
+    let t;
+    $('#f-search').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { F.search = e.target.value; refreshFluxo(); }, 180); };
+    $('#f-toggle').onclick = () => { FX.filtersOpen = !FX.filtersOpen; $('#fx-more').classList.toggle('open', FX.filtersOpen); };
+    $$('#fx-mode button').forEach((b) => b.onclick = () => {
+      FX.mode = b.dataset.mode;
+      try { localStorage.setItem('flow:mode', FX.mode); } catch (_) { /* ignora */ }
       refreshFluxo();
-    };
+    });
+    $$('#fx-nav [data-nav]').forEach((b) => b.onclick = () => { const n = +b.dataset.nav; FX.offset = n === 0 ? 0 : FX.offset + n; refreshFluxo(); });
+    $('#fx-msg').onclick = () => openMessages();
+    $('#fx-new').onclick = () => openNewDoctor();
+    $('#fx-export').onclick = exportFiltered;
+    buildFilters();
+    document.addEventListener('click', (e) => { const p = $('#f-hosp-pop'); if (p && !e.target.closest('#f-hosp-wrap')) p.hidden = true; });
   }
   refreshFluxo();
 }
 VIEWS.fluxo = renderFluxo;
 
-function refreshFluxo() {
-  if (!$('#fx-board')) return;
-  renderMetrics();
+async function refreshFluxo() {
+  if (!$('#fx-body')) return;
+  renderKpis();
   syncFilterWidgets();
+  $$('#fx-mode button').forEach((b) => b.classList.toggle('active', b.dataset.mode === FX.mode));
+  $('#fx-nav').hidden = FX.mode !== 'jornada';
+  const body = $('#fx-body');
+  body.classList.toggle('kb', FX.mode === 'kanban');
   const list = filteredDoctors();
-  $('#fx-dash-toggle').innerHTML = `${dashOpen ? '▾' : '▸'} Dashboard Analytics <span class="muted small">(${list.length} médico(s) no filtro)</span>`;
-  $('#fx-dash').innerHTML = dashOpen ? dashboardHtml(list) : '';
-  bindDashboard();
-  renderBoard(list);
+  if (FX.mode === 'kanban') { renderBoard(list); return; }
+  if (!STAGE_EV) {
+    body.innerHTML = '<div class="op-more">Carregando jornada...</div>';
+    try { STAGE_EV = stageEvents(await loadAllActivities()); } catch (e) { body.innerHTML = `<div class="op-more">Erro ao carregar histórico: ${esc(e.message)}</div>`; return; }
+  }
+  renderJornada(list);
 }
 
-// ---------- métricas (sobre todos) ----------
-function renderMetrics() {
+// ---------- KPIs em pílula ----------
+function renderKpis() {
   const all = S.doctors;
   const open = all.filter((d) => !FINAL_STAGES.includes(d.stage));
-  const okCount = open.filter((d) => doctorSla(d).status !== 'urgent').length;
-  const pct = open.length ? Math.round((okCount / open.length) * 100) : 100;
-  $('#fx-metrics').innerHTML = `
-    <div class="kpi"><div class="l">Total cadastros</div><div class="v">${all.length}</div></div>
-    <div class="kpi"><div class="l">Aprovados</div><div class="v" style="color:var(--green)">${all.filter((d) => d.stage === 'aprovado').length}</div></div>
-    <div class="kpi"><div class="l">Doc. pendente</div><div class="v" style="color:var(--amber)">${all.filter((d) => d.stage === 'documentacao_pendente').length}</div></div>
-    <div class="kpi"><div class="l">SLA cumprido</div><div class="v" style="color:${pct >= 80 ? 'var(--green)' : pct >= 50 ? 'var(--amber)' : 'var(--red)'}">${pct}%</div><div class="s">${open.length} em andamento</div></div>
-    <div class="kpi"><div class="l">Ações</div><div style="display:flex;gap:6px;margin-top:4px;flex-wrap:wrap">
-      <button class="btn btn-primary btn-sm" id="fx-new">＋ Novo médico</button>
-      <button class="btn btn-line btn-sm" id="fx-msg">✉ Cobranças</button></div></div>`;
-  $('#fx-new').onclick = () => openNewDoctor();
-  $('#fx-msg').onclick = () => openMessages();
+  const venc = open.filter((d) => doctorSla(d).status === 'urgent').length;
+  const pct = open.length ? Math.round(((open.length - venc) / open.length) * 100) : 100;
+  const n = filteredDoctors().length;
+  $('#fx-kpis').innerHTML = `
+    <span class="op-kpi"><b>${all.length}</b> cadastros</span>
+    <span class="op-kpi"><b>${open.length}</b> em andamento</span>
+    <span class="op-kpi clk ${F.stage === 'aprovado' ? 'on' : ''}" data-k="aprovado"><b>${all.filter((d) => d.stage === 'aprovado').length}</b> aprovados</span>
+    <span class="op-kpi clk ${F.stage === 'documentacao_pendente' ? 'on' : ''}" data-k="docpend"><b>${all.filter((d) => d.stage === 'documentacao_pendente').length}</b> doc. pendente</span>
+    <span class="op-kpi clk bad ${F.slaVencido ? 'on' : ''}" data-k="sla"><b>${venc}</b> SLA vencido</span>
+    <span class="op-kpi clk bad ${F.priority === 'urgente' ? 'on' : ''}" data-k="urg"><b>${all.filter((d) => d.priority === 'urgente' && !FINAL_STAGES.includes(d.stage)).length}</b> urgentes</span>
+    <span class="op-kpi"><b>${pct}%</b> SLA cumprido</span>
+    ${n !== all.length ? `<span class="op-kpi" style="background:var(--amber-soft)"><b style="color:var(--amber-ink)">${n}</b> no filtro</span>` : ''}`;
+  $$('#fx-kpis [data-k]').forEach((k) => k.onclick = () => {
+    const v = k.dataset.k;
+    if (v === 'aprovado') F.stage = F.stage === 'aprovado' ? '' : 'aprovado';
+    if (v === 'docpend') F.stage = F.stage === 'documentacao_pendente' ? '' : 'documentacao_pendente';
+    if (v === 'sla') F.slaVencido = !F.slaVencido;
+    if (v === 'urg') F.priority = F.priority === 'urgente' ? '' : 'urgente';
+    buildFilters(); refreshFluxo();
+  });
 }
 
 // ---------- filtros ----------
@@ -81,136 +122,148 @@ function buildFilters() {
   const estados = uniq(S.doctors.map((d) => d.estado).filter(Boolean)).sort();
   const setores = uniq([...SETORES, ...S.doctors.flatMap((d) => d.setores || [])]);
   const opt = (v, l, sel) => `<option value="${esc(v)}" ${sel === v ? 'selected' : ''}>${esc(l)}</option>`;
-  $('#fx-filters').innerHTML = `
-    <input class="inp search" id="f-search" placeholder="Buscar médico, CRM, CPF, hospital..." value="${esc(F.search)}">
-    <div style="position:relative">
-      <button class="btn btn-line btn-sm" id="f-hosp-btn"></button>
-      <div class="pop" id="f-hosp-pop" hidden style="top:36px;left:0;right:auto;width:320px;padding:8px"></div>
+  $('#fx-more').innerHTML = `
+    <div style="position:relative" id="f-hosp-wrap">
+      <button id="f-hosp-btn"></button>
+      <div class="pop" id="f-hosp-pop" hidden style="top:38px;left:0;right:auto;width:330px;padding:8px"></div>
     </div>
-    <select class="inp" id="f-setor"><option value="">Todos setores</option>${setores.map((s) => opt(s, s, F.setor)).join('')}</select>
-    <select class="inp" id="f-estado"><option value="">Todos estados</option>${estados.map((s) => opt(s, s, F.estado)).join('')}</select>
-    <select class="inp" id="f-stage"><option value="">Todas etapas</option>${S.stages.map((s) => opt(s.id, s.label, F.stage)).join('')}</select>
-    <select class="inp" id="f-disc"><option value="">Todos DISC</option>${DISC.map((s) => opt(s, DISC_LABEL[s], F.disc)).join('')}</select>
-    <select class="inp" id="f-status"><option value="">Todos status</option>${STATUS_ESP.map((s) => opt(s, s, F.statusEsp)).join('')}</select>
-    <select class="inp" id="f-app"><option value="">Todos APP</option>${opt('true', 'Com APP', F.app)}${opt('false', 'Sem APP', F.app)}</select>
-    <select class="inp" id="f-proc"><option value="">Todas proc.</option>${opt('true', 'Com procuração', F.procuracao)}${opt('false', 'Sem procuração', F.procuracao)}</select>
-    <select class="inp" id="f-prio"><option value="">Todas prior.</option>${Object.entries(PRIORITIES).map(([k, l]) => opt(k, l, F.priority)).join('')}</select>
-    <label class="small" style="display:flex;gap:5px;align-items:center;font-weight:600"><input type="checkbox" id="f-sla" ${F.slaVencido ? 'checked' : ''}> SLA vencido</label>
-    <button class="btn-ghost" id="f-clear" hidden>Limpar filtros</button>`;
-  let t;
-  $('#f-search').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { F.search = e.target.value; refreshFluxo(); }, 180); };
+    <select id="f-stage"><option value="">Qualquer etapa</option>${S.stages.map((s) => opt(s.id, s.label, F.stage)).join('')}</select>
+    <select id="f-setor"><option value="">Todos os setores</option>${setores.map((s) => opt(s, s, F.setor)).join('')}</select>
+    <select id="f-prio"><option value="">Qualquer prioridade</option>${Object.entries(PRIORITIES).map(([k, l]) => opt(k, l, F.priority)).join('')}</select>
+    <select id="f-status"><option value="">Formação: todas</option>${STATUS_ESP.map((s) => opt(s, s, F.statusEsp)).join('')}</select>
+    <select id="f-disc"><option value="">DISC: todos</option>${DISC.map((s) => opt(s, DISC_LABEL[s], F.disc)).join('')}</select>
+    <select id="f-app"><option value="">APP: todos</option>${opt('true', 'Com APP', F.app)}${opt('false', 'Sem APP', F.app)}</select>
+    <select id="f-proc"><option value="">Procuração: todas</option>${opt('true', 'Com procuração', F.procuracao)}${opt('false', 'Sem procuração', F.procuracao)}</select>
+    <select id="f-estado"><option value="">UF: todas</option>${estados.map((s) => opt(s, s, F.estado)).join('')}</select>
+    <select id="f-sla"><option value="">SLA: qualquer</option>${opt('1', 'Só SLA vencido', F.slaVencido ? '1' : '')}</select>
+    <label class="small" style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="f-done" ${FX.showDone ? 'checked' : ''}> Mostrar concluídos na Jornada</label>
+    <button id="f-clear">Limpar filtros</button>`;
   const bind = (id, key) => { $(id).onchange = (e) => { F[key] = e.target.value; refreshFluxo(); }; };
   bind('#f-setor', 'setor'); bind('#f-estado', 'estado'); bind('#f-stage', 'stage'); bind('#f-disc', 'disc');
   bind('#f-status', 'statusEsp'); bind('#f-app', 'app'); bind('#f-proc', 'procuracao'); bind('#f-prio', 'priority');
-  $('#f-sla').onchange = (e) => { F.slaVencido = e.target.checked; refreshFluxo(); };
+  $('#f-sla').onchange = (e) => { F.slaVencido = !!e.target.value; refreshFluxo(); };
+  $('#f-done').onchange = (e) => { FX.showDone = e.target.checked; refreshFluxo(); };
   $('#f-clear').onclick = () => {
     Object.assign(F, { hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false });
     buildFilters(); refreshFluxo();
   };
-  $('#f-hosp-btn').onclick = (e) => {
-    e.stopPropagation();
-    const pop = $('#f-hosp-pop');
-    pop.hidden = !pop.hidden;
-    if (!pop.hidden) renderHospPop();
-  };
-  document.addEventListener('click', (e) => { if (!e.target.closest('#f-hosp-pop') && $('#f-hosp-pop')) $('#f-hosp-pop').hidden = true; });
+  $('#f-hosp-btn').onclick = (e) => { e.stopPropagation(); const p = $('#f-hosp-pop'); p.hidden = !p.hidden; if (!p.hidden) renderHospPop(); };
 }
 function renderHospPop() {
   const names = uniq([...S.hospitals.map((h) => h.nome), ...S.doctors.map((d) => d.hospital)]).sort((a, b) => a.localeCompare(b));
   const pop = $('#f-hosp-pop');
   pop.innerHTML = `<div style="display:flex;justify-content:space-between;padding:2px 4px 8px"><button class="btn-ghost" id="hp-all">Selecionar todos</button><button class="btn-ghost" id="hp-none">Limpar</button></div>` +
     names.map((n) => `<label style="display:flex;gap:8px;padding:4px;font-size:12.5px;cursor:pointer"><input type="checkbox" value="${esc(n)}" ${F.hospitals.includes(n) ? 'checked' : ''}> ${esc(n)}</label>`).join('');
-  $$('input', pop).forEach((c) => c.onchange = () => {
-    F.hospitals = $$('input:checked', pop).map((x) => x.value);
-    refreshFluxo();
-  });
+  $$('input', pop).forEach((c) => c.onchange = () => { F.hospitals = $$('input:checked', pop).map((x) => x.value); refreshFluxo(); });
   $('#hp-all', pop).onclick = () => { F.hospitals = names.slice(); renderHospPop(); refreshFluxo(); };
   $('#hp-none', pop).onclick = () => { F.hospitals = []; renderHospPop(); refreshFluxo(); };
 }
 function syncFilterWidgets() {
   const b = $('#f-hosp-btn');
   if (!b) return;
-  b.textContent = !F.hospitals.length ? 'Todos hospitais ▾' : F.hospitals.length === 1 ? F.hospitals[0] + ' ▾' : `${F.hospitals.length} hospitais ▾`;
-  const active = F.hospitals.length || F.setor || F.estado || F.stage || F.disc || F.statusEsp || F.app || F.procuracao || F.priority || F.slaVencido;
-  $('#f-clear').hidden = !active;
-  $('#f-stage').value = F.stage; $('#f-prio').value = F.priority; $('#f-sla').checked = F.slaVencido;
+  b.textContent = !F.hospitals.length ? 'Todos os hospitais ▾' : F.hospitals.length === 1 ? F.hospitals[0] + ' ▾' : `${F.hospitals.length} hospitais ▾`;
+  const c = activeFilterCount();
+  $('#f-count').hidden = !c; $('#f-count').textContent = c;
+  $('#f-stage').value = F.stage; $('#f-prio').value = F.priority; $('#f-sla').value = F.slaVencido ? '1' : '';
 }
 
-// ---------- dashboard (sobre filtrados) ----------
-function hbars(rows, color) {
-  const max = Math.max(1, ...rows.map((r) => r.v));
-  return rows.map((r) => `<div class="hbar"><span class="t" title="${esc(r.l)}">${esc(r.l)}</span><span class="b"><i style="width:${(r.v / max) * 100}%;background:${r.c || color}"></i></span><span class="n">${esc(r.txt ?? r.v)}</span></div>`).join('') || '<div class="empty">Sem dados</div>';
+function exportFiltered() {
+  const list = filteredDoctors();
+  downloadCsv(`medicos_flow_${new Date().toISOString().slice(0, 10)}.csv`,
+    ['Médico', 'Hospital', 'Setores', 'CRM', 'CPF', 'WhatsApp', 'Etapa', 'Prioridade', 'Entrada', 'SLA', 'Formação', 'DISC', 'APP', 'Procuração', 'Doc. pendente', 'Docs %'],
+    list.map((d) => {
+      const s = FINAL_STAGES.includes(d.stage) ? null : doctorSla(d);
+      return [d.name, d.hospital, (d.setores || []).join(', '), d.crm, d.cpf, d.whatsapp, stageLabel(d.stage), d.priority, fmtDate(d.entry_date),
+        s ? (s.status === 'urgent' ? 'Vencido' : fmtRemaining(s.remaining)) : '—', d.status_especialidade, d.disc, d.app ? 'Sim' : 'Não', d.procuracao ? 'Sim' : 'Não', d.doc_pendente, S.docProgress[d.id] || 0];
+    }));
+  toast(`${list.length} médico(s) exportado(s)`, 'ok');
 }
-function dashboardHtml(list) {
-  if (!list.length) return '';
-  const total = list.length;
-  const apr = list.filter((d) => d.stage === 'aprovado').length;
-  const rep = list.filter((d) => d.stage === 'reprovado').length;
-  const open = list.filter((d) => !FINAL_STAGES.includes(d.stage));
-  const slas = open.map(doctorSla);
-  const urgent = slas.filter((s) => s.status === 'urgent').length;
-  const warning = slas.filter((s) => s.status === 'warning').length;
-  const okS = slas.filter((s) => s.status === 'ok').length;
-  const count = (arr, key) => {
-    const m = {};
-    arr.forEach((x) => { const k = key(x); if (k) m[k] = (m[k] || 0) + 1; });
-    return Object.entries(m).sort((a, b) => b[1] - a[1]);
+
+// ================= JORNADA (linha do tempo por dia, igual à tela Aliança) =================
+const WD = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
+function jornadaDays() {
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+  const start = new Date(today); start.setDate(start.getDate() - (FX.days - 4) + FX.offset);
+  return { today, days: Array.from({ length: FX.days }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return d; }) };
+}
+/** Etapa do médico no fim de cada dia da janela (null = ainda não tinha entrado). */
+function stagesByDay(d, days, today) {
+  const ev = (STAGE_EV[d.id] || []).slice().sort((a, b) => a.at - b.at);
+  const entry = new Date(d.entry_date);
+  return days.map((day) => {
+    if (day > today) return null;
+    const end = new Date(day); end.setHours(23, 59, 59, 999);
+    if (entry > end) return null;
+    if (!ev.length) return d.stage;
+    let st = 'aguardando_contato';
+    ev.forEach((e) => { if (e.at <= end) st = e.stage; });
+    return st;
+  });
+}
+
+function renderJornada(list) {
+  const body = $('#fx-body');
+  const { today, days } = jornadaDays();
+  $('#fx-range').textContent = `${pad(days[0].getDate())}/${pad(days[0].getMonth() + 1)} – ${pad(days[days.length - 1].getDate())}/${pad(days[days.length - 1].getMonth() + 1)}`;
+  const rows = list.filter((d) => FX.showDone || F.stage || !FINAL_STAGES.includes(d.stage));
+  const daysIn = (d) => Math.floor((Date.now() - new Date(d.entry_date)) / 864e5) + 1;
+  const slaKey = (d) => (FINAL_STAGES.includes(d.stage) ? 1e9 : doctorSla(d).remaining);
+  rows.sort((a, b) => (FX.sort === 'nome' ? a.name.localeCompare(b.name) : FX.sort === 'dias' ? daysIn(b) - daysIn(a) : slaKey(a) - slaKey(b)));
+  const perRow = new Map(rows.map((d) => [d.id, stagesByDay(d, days, today)]));
+  const todayIdx = days.findIndex((d) => +d === +today);
+
+  // resumo: quantos médicos (do filtro) estavam em cada etapa em cada dia
+  const counts = {};
+  S.stages.forEach((s) => { counts[s.id] = days.map(() => 0); });
+  list.forEach((d) => {
+    const sts = perRow.get(d.id) || stagesByDay(d, days, today);
+    sts.forEach((st, i) => { if (st && counts[st]) counts[st][i]++; });
+  });
+  const nowCount = (id) => list.filter((d) => d.stage === id).length;
+
+  const head = `<div class="op-row op-head"><div class="op-left">Médico · ${rows.length}
+      <select id="fx-sort" style="margin-left:auto;border:none;background:transparent;font:inherit;color:inherit;text-transform:uppercase;cursor:pointer">
+        <option value="sla" ${FX.sort === 'sla' ? 'selected' : ''}>SLA mais crítico</option><option value="dias" ${FX.sort === 'dias' ? 'selected' : ''}>Mais dias no fluxo</option><option value="nome" ${FX.sort === 'nome' ? 'selected' : ''}>Nome</option></select></div>
+    <div class="op-right">${days.map((d, i) => `<div class="op-mh ${i === todayIdx ? 'cur' : ''} ${[0, 6].includes(d.getDay()) ? 'we' : ''}" style="left:calc(${i} * var(--dw))">${pad(d.getDate())}/${pad(d.getMonth() + 1)}<small>${WD[d.getDay()]}</small></div>`).join('')}</div></div>`;
+
+  const sum = `<div class="op-sumbox">${S.stages.map((s) => `<div class="op-sumrow"><div class="op-left ${F.stage === s.id ? 'sel' : ''}" data-sstage="${s.id}" title="Filtrar por esta etapa"><span class="op-dot" style="background:${esc(s.color)}"></span>${esc(s.label)}<b style="margin-left:auto;font-family:Poppins">${nowCount(s.id)}</b></div>
+    <div class="op-right">${counts[s.id].map((c, i) => `<div class="op-sumcell ${c ? '' : 'z'}" style="left:calc(${i} * var(--dw))">${days[i] > today ? '' : c}</div>`).join('')}</div></div>`).join('')}</div>`;
+
+  const rowHtml = (d) => {
+    const sts = perRow.get(d.id);
+    const segs = [];
+    sts.forEach((st, i) => {
+      if (!st) return;
+      const last = segs[segs.length - 1];
+      if (last && last.st === st && last.end === i - 1) last.end = i; else segs.push({ st, start: i, end: i });
+    });
+    const sla = FINAL_STAGES.includes(d.stage) ? null : doctorSla(d);
+    const n = daysIn(d);
+    return `<div class="op-row" data-doc="${d.id}">
+      <div class="op-left"><div class="n"><span class="sdot s-${sla ? sla.status : 'none'}"></span>${esc(d.name)}${d.priority === 'urgente' ? '<span class="tagx bad">URG</span>' : d.priority === 'hospital_novo' ? '<span class="tagx warn">3h</span>' : ''}</div>
+        <div class="m">${esc(d.hospital)}${(d.setores || []).length ? ' · ' + esc(d.setores.join(', ')) : ''} · ${n}d${sla ? ` · <span style="color:${sla.status === 'urgent' ? 'var(--red)' : sla.status === 'warning' ? 'var(--amber)' : 'inherit'}">${sla.status === 'urgent' ? 'SLA vencido' : 'SLA ' + fmtRemaining(sla.remaining)}</span>` : ''}</div></div>
+      <div class="op-right">${todayIdx >= 0 ? `<div class="op-today" style="left:calc(${todayIdx} * var(--dw) + var(--dw) * ${(Date.now() - today) / 864e5})"></div>` : ''}
+        ${segs.map((s) => { const st = stageById(s.st); const w = s.end - s.start + 1; return `<div class="seg" style="left:calc(${s.start} * var(--dw) + 2px);width:calc(${w} * var(--dw) - 4px);background:${esc(st?.color || '#999')}" title="${esc(st?.label || s.st)}">${w >= 2 ? esc(st?.label || '') : ''}</div>`; }).join('')}</div></div>`;
   };
-  const funnel = ['aguardando_contato', 'documentacao_pendente', 'aguardando_medico', 'aguardando_hospital', 'aprovado', 'reprovado']
-    .map((id) => ({ l: stageLabel(id).replace('Aguardando ', 'Ag. ').replace('Documentação ', 'Doc. ').replace('Retorno ', 'Ret. '), v: list.filter((d) => d.stage === id).length, c: stageById(id)?.color }));
-  const tempo = S.stages.filter((s) => s.id !== 'reprovado').map((s) => {
-    const ds = list.filter((d) => d.stage === s.id);
-    const avg = ds.length ? ds.reduce((a, d) => a + (Date.now() - new Date(d.stage_entered_at)) / 3.6e6, 0) / ds.length : 0;
-    return { l: s.label, v: Math.round(avg), txt: Math.round(avg) + 'h', c: s.color };
-  });
-  const setoresCount = {};
-  list.forEach((d) => (d.setores || []).forEach((s) => { setoresCount[s] = (setoresCount[s] || 0) + 1; }));
-  const topSet = Object.entries(setoresCount).sort((a, b) => b[1] - a[1]).slice(0, 6).map(([l, v]) => ({ l, v }));
-  const topHosp = count(list, (d) => d.hospital).slice(0, 6).map(([l, v]) => ({ l, v }));
-  const slaPct = open.length ? Math.round((okS / open.length) * 100) : 100;
-  const on = (k) => (k ? 'on' : '');
-  return `
-    <div class="kpis">
-      <div class="kpi"><div class="l">Em andamento</div><div class="v">${open.length}</div><div class="s">de ${total} total</div></div>
-      <div class="kpi click ${on(F.stage === 'aprovado')}" data-dash="aprovado"><div class="l">Taxa de aprovação</div><div class="v">${apr + rep ? Math.round((apr / (apr + rep)) * 100) : 0}%</div><div class="s">${apr} aprovados</div></div>
-      <div class="kpi click ${on(F.priority === 'urgente')}" data-dash="urgente"><div class="l">Urgentes</div><div class="v" style="color:var(--red)">${list.filter((d) => d.priority === 'urgente').length}</div><div class="s">${list.some((d) => d.priority === 'urgente') ? 'precisam atenção' : 'tudo ok'}</div></div>
-      <div class="kpi click ${on(F.slaVencido)}" data-dash="sla"><div class="l">SLA vencido</div><div class="v" style="color:var(--red)">${urgent}</div><div class="s">${warning} em alerta</div></div>
-      <div class="kpi"><div class="l">Hospitais</div><div class="v">${uniq(list.map((d) => d.hospital)).length}</div></div>
-      <div class="kpi"><div class="l">Setores</div><div class="v">${Object.keys(setoresCount).length}</div></div>
-    </div>
-    <div class="grid-3">
-      <div class="panel"><h3>Funil de conversão</h3>${hbars(funnel)}</div>
-      <div class="panel"><h3>SLA em dia</h3>
-        <div style="display:flex;align-items:center;gap:18px">
-          <div style="width:110px;height:110px;border-radius:50%;background:conic-gradient(var(--green) ${slaPct * 3.6}deg, var(--border-soft) 0);display:grid;place-items:center">
-            <div style="width:80px;height:80px;border-radius:50%;background:var(--surface);display:grid;place-items:center;font-family:Poppins;font-weight:700;font-size:1.3rem">${slaPct}%</div></div>
-          <div class="small"><div><span class="slapill ok">${okS} ok</span></div><div style="margin:6px 0"><span class="slapill warning">${warning} !</span></div><div><span class="slapill urgent">${urgent} !!</span></div></div>
-        </div></div>
-      <div class="panel"><h3>Tempo médio na etapa atual (horas corridas)</h3>${hbars(tempo)}</div>
-      <div class="panel"><h3>Top hospitais</h3>${hbars(topHosp, 'var(--brand)')}</div>
-      <div class="panel"><h3>Top setores</h3>${hbars(topSet, 'var(--teal-deep)')}</div>
-      <div class="panel"><h3>DISC</h3>${hbars(DISC.map((k) => ({ l: DISC_LABEL[k], v: list.filter((d) => d.disc === k).length, c: k === 'ADERENTE' ? 'var(--green)' : k === 'REPROVADO' ? 'var(--red)' : k === 'AGUARDANDO RETORNO' ? '#e0a94f' : 'var(--ink-faint)' })))}</div>
-    </div>`;
-}
-function bindDashboard() {
-  $$('[data-dash]').forEach((el) => el.onclick = () => {
-    const k = el.dataset.dash;
-    if (k === 'aprovado') { F.stage = F.stage === 'aprovado' ? '' : 'aprovado'; }
-    if (k === 'urgente') { F.priority = F.priority === 'urgente' ? '' : 'urgente'; F.stage = ''; F.slaVencido = false; }
-    if (k === 'sla') { F.slaVencido = !F.slaVencido; F.stage = ''; F.priority = ''; }
-    refreshFluxo();
-  });
+
+  body.innerHTML = `<div class="op-scroll" style="--ndays:${FX.days}">${head}${sum}${rows.slice(0, FX.limit).map(rowHtml).join('') || '<div class="op-more">Nenhum médico com esses filtros.</div>'}
+    ${rows.length > FX.limit ? `<div class="op-more"><button class="btn btn-line btn-sm" id="fx-morerows">Mostrar mais ${Math.min(300, rows.length - FX.limit)} de ${rows.length - FX.limit}</button></div>` : ''}</div>`;
+  $$('#fx-body [data-doc]').forEach((r) => r.onclick = () => openDoctor(S.doctors.find((x) => x.id === r.dataset.doc)));
+  $$('#fx-body [data-sstage]').forEach((c) => c.onclick = () => { F.stage = F.stage === c.dataset.sstage ? '' : c.dataset.sstage; buildFilters(); refreshFluxo(); });
+  $('#fx-sort').onclick = (e) => e.stopPropagation();
+  $('#fx-sort').onchange = (e) => { FX.sort = e.target.value; refreshFluxo(); };
+  const mr = $('#fx-morerows'); if (mr) mr.onclick = () => { FX.limit += 300; refreshFluxo(); };
 }
 
-// ---------- kanban ----------
+// ================= KANBAN =================
 function cardHtml(d) {
   const sla = FINAL_STAGES.includes(d.stage) ? null : doctorSla(d);
   const prog = S.docProgress[d.id] || 0;
   const t = (on, label) => `<span class="tag ${on ? 'on' : 'off'}">${label}</span>`;
   return `<div class="kcard" draggable="true" data-id="${d.id}">
-    <div class="top"><span class="sdot s-${sla ? sla.status : 'none'}"></span><span class="nm" title="${esc(d.name)}">${esc(d.name)}</span>${d.priority === 'urgente' ? '<span class="tag r">URG</span>' : d.priority === 'hospital_novo' ? '<span class="tag a">NOVO 3h</span>' : ''}</div>
-    <div class="kgrid"><span title="${esc((d.setores || []).join(', '))}">${esc((d.setores || []).join(', ') || '—')}</span><span title="${esc(d.hospital)}">${esc(d.hospital)}</span><span>${esc(d.estado || '—')}</span><span>${esc(d.whatsapp || '—')}</span></div>
-    <div class="tags">${d.crm ? `<span class="tag">${esc(d.crm)}</span>` : ''}${d.status_especialidade ? `<span class="tag">${esc(d.status_especialidade)}</span>` : ''}${d.disc ? `<span class="tag ${DISC_CLASS[d.disc]}">${esc(DISC_LABEL[d.disc])}</span>` : ''}${t(d.link_enviado, 'Link')}${t(d.app, 'APP')}${t(d.procuracao, 'Proc.')}</div>
+    <div class="top"><span class="sdot s-${sla ? sla.status : 'none'}"></span><span class="nm" title="${esc(d.name)}">${esc(d.name)}</span>${d.priority === 'urgente' ? '<span class="tagx bad">URG</span>' : d.priority === 'hospital_novo' ? '<span class="tagx warn">3h</span>' : ''}</div>
+    <div class="kgrid"><span title="${esc((d.setores || []).join(', '))}">${esc((d.setores || []).join(', ') || '—')}</span><span title="${esc(d.hospital)}">${esc(d.hospital)}</span><span>${esc(d.crm || '—')}</span><span>${esc(d.whatsapp || '—')}</span></div>
+    <div class="tags">${d.status_especialidade ? `<span class="tag">${esc(d.status_especialidade)}</span>` : ''}${d.disc ? `<span class="tag ${DISC_CLASS[d.disc]}">${esc(DISC_LABEL[d.disc])}</span>` : ''}${t(d.link_enviado, 'Link')}${t(d.app, 'APP')}${t(d.procuracao, 'Proc.')}</div>
     ${d.doc_pendente ? `<div class="pend" title="${esc(d.doc_pendente)}">📄 ${esc(d.doc_pendente)}</div>` : ''}
     <div class="foot"><span class="prog"><i style="width:${prog}%;background:${prog >= 100 ? 'var(--green)' : prog >= 50 ? '#e0a94f' : 'var(--ink-faint)'}"></i></span>${prog}%
       <span>${fmtDate(d.entry_date)}</span>${sla ? `<span class="slapill ${sla.status}">${fmtRemaining(sla.remaining)}</span>` : ''}</div>
@@ -219,10 +272,10 @@ function cardHtml(d) {
 
 let dragDoctor = null, dragCol = null;
 function renderBoard(list) {
-  const board = $('#fx-board');
+  const body = $('#fx-body');
   const byStage = {};
   list.forEach((d) => { (byStage[d.stage] ||= []).push(d); });
-  board.innerHTML = S.stages.map((s) => {
+  body.innerHTML = `<div class="kanban-wrap"><div class="kanban-board" id="fx-board">${S.stages.map((s) => {
     const items = byStage[s.id] || [];
     const lim = colLimit[s.id] || 80;
     return `<div class="kanban-col" data-stage="${s.id}">
@@ -235,8 +288,8 @@ function renderBoard(list) {
         ${items.length > lim ? `<button class="more-btn" data-more="${s.id}">Mostrar mais ${items.length - lim} médico(s)</button>` : ''}
         ${lim > 80 ? `<button class="more-btn" data-less="${s.id}">Mostrar menos</button>` : ''}</div>
     </div>`;
-  }).join('') + (S.isAdmin ? '<button class="newcol" id="fx-newcol">＋ Nova coluna</button>' : '');
-
+  }).join('')}${S.isAdmin ? '<button class="newcol" id="fx-newcol">＋ Nova coluna</button>' : ''}</div></div>`;
+  const board = $('#fx-board');
   $$('.kcard', board).forEach((c) => {
     c.onclick = () => { const d = S.doctors.find((x) => x.id === c.dataset.id); if (d) openDoctor(d); };
     c.ondragstart = (e) => { dragDoctor = c.dataset.id; dragCol = null; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; };
@@ -267,16 +320,19 @@ function renderBoard(list) {
   if (nc) nc.onclick = openNewStage;
 }
 
-/** Move o médico de etapa, registra no histórico (o banco gera as notificações). */
+/** Move o médico de etapa e registra no histórico (o banco gera as notificações). */
 async function moveDoctor(d, toStage) {
   const st = stageById(toStage);
   const patch = { stage: toStage, stage_entered_at: new Date().toISOString(), sla_hours: st?.sla_hours ?? 24 };
   const { error } = await sb.from('flow_doctors').update(patch).eq('id', d.id);
   if (error) { toast('Erro ao mover médico: ' + error.message, 'err'); return false; }
   Object.assign(d, patch);
-  await sb.from('flow_activities').insert({ doctor_id: d.id, description: `Movido para ${st?.label || toStage}`, type: 'stage_change' });
+  const { data: act } = await sb.from('flow_activities').insert({ doctor_id: d.id, description: `Movido para ${st?.label || toStage}`, type: 'stage_change' }).select().single();
+  if (STAGE_EV && act) (STAGE_EV[d.id] ||= []).push({ at: new Date(act.created_at), stage: toStage });
+  if (typeof ACTS !== 'undefined') ACTS = null;
   notifyPainel(d, toStage);
-  refreshFluxo();
+  toast(`${d.name} → ${st?.label || toStage}`, 'ok');
+  afterDoctorChange();
   return true;
 }
 
@@ -300,7 +356,7 @@ async function reorderStages(fromId, toId) {
 
 function openNewStage() {
   const m = openModal(`
-    <div class="modal-head"><h2>Nova coluna</h2><button class="x" data-close>×</button></div>
+    <div class="modal-head"><div><h2>Nova coluna</h2><div class="om-sub">Etapa extra do fluxo de credenciamento</div></div><button class="x" data-close>✕</button></div>
     <div class="modal-body">
       <div class="field"><label>Nome</label><input class="inp" id="ns-nome" placeholder="Ex: Em revisão"></div>
       <div class="form-grid"><div class="field"><label>Cor</label><input type="color" id="ns-cor" value="#6366f1" style="height:38px;width:100%"></div>
@@ -315,7 +371,7 @@ function openNewStage() {
     const { error } = await sb.from('flow_stages').upsert([row, ...shifted]);
     if (error) return toast('Não foi possível criar coluna: ' + error.message, 'err');
     S.stages = [row, ...shifted];
-    m.close(); toast('Coluna criada', 'ok'); refreshFluxo();
+    m.close(); toast('Coluna criada', 'ok'); buildFilters(); refreshFluxo();
   };
 }
 async function deleteStage(id) {
@@ -326,5 +382,56 @@ async function deleteStage(id) {
   const { error } = await sb.from('flow_stages').delete().eq('id', id);
   if (error) return toast('Sem permissão para excluir coluna.', 'err');
   S.stages = S.stages.filter((x) => x.id !== id);
-  toast('Coluna removida', 'ok'); refreshFluxo();
+  toast('Coluna removida', 'ok'); buildFilters(); refreshFluxo();
 }
+
+// ================= INDICADORES =================
+const IND = { hospital: '' };
+function hbars(rows, color) {
+  const max = Math.max(1, ...rows.map((r) => r.v));
+  return rows.map((r) => `<div class="hbar"><span class="t" title="${esc(r.l)}">${esc(r.l)}</span><span class="b"><i style="width:${(r.v / max) * 100}%;background:${r.c || color}"></i></span><span class="n">${esc(r.txt ?? r.v)}</span></div>`).join('') || '<div class="empty">Sem dados</div>';
+}
+function renderIndicadores() {
+  const root = $('#view-indicadores');
+  const list = S.doctors.filter((d) => !IND.hospital || d.hospital === IND.hospital);
+  const total = list.length;
+  const apr = list.filter((d) => d.stage === 'aprovado').length;
+  const rep = list.filter((d) => d.stage === 'reprovado').length;
+  const open = list.filter((d) => !FINAL_STAGES.includes(d.stage));
+  const slas = open.map(doctorSla);
+  const urgent = slas.filter((s) => s.status === 'urgent').length, warning = slas.filter((s) => s.status === 'warning').length, okS = slas.filter((s) => s.status === 'ok').length;
+  const slaPct = open.length ? Math.round((okS / open.length) * 100) : 100;
+  const count = (arr, key) => { const m = {}; arr.forEach((x) => { const k = key(x); if (k) m[k] = (m[k] || 0) + 1; }); return Object.entries(m).sort((a, b) => b[1] - a[1]); };
+  const funnel = S.stages.map((s) => ({ l: s.label, v: list.filter((d) => d.stage === s.id).length, c: s.color }));
+  const tempo = S.stages.filter((s) => !FINAL_STAGES.includes(s.id)).map((s) => {
+    const ds = open.filter((d) => d.stage === s.id);
+    const avg = ds.length ? ds.reduce((a, d) => a + businessHours(d.stage_entered_at), 0) / ds.length : 0;
+    return { l: s.label, v: Math.round(avg), txt: `${Math.round(avg)}h / ${s.sla_hours}h`, c: avg > s.sla_hours ? 'var(--red)' : 'var(--brand)' };
+  });
+  const setoresCount = {};
+  list.forEach((d) => (d.setores || []).forEach((s) => { setoresCount[s] = (setoresCount[s] || 0) + 1; }));
+  const topSet = Object.entries(setoresCount).sort((a, b) => b[1] - a[1]).slice(0, 8).map(([l, v]) => ({ l, v }));
+  const byHosp = count(open, (d) => d.hospital).slice(0, 10).map(([l, v]) => ({ l, v, txt: `${v} (${open.filter((d) => d.hospital === l && doctorSla(d).status === 'urgent').length} venc.)` }));
+  const hospitals = uniq(S.doctors.map((d) => d.hospital)).sort();
+  root.innerHTML = `
+    <div class="pg-head"><h2>📊 Indicadores</h2><span class="sub">Funil do credenciamento, SLA e onde estão os gargalos.</span>
+      <span class="right"><select class="inp" id="ind-h" style="width:260px"><option value="">Todos os hospitais</option>${hospitals.map((h) => `<option ${IND.hospital === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></span></div>
+    <div class="kpis">
+      <div class="kpi"><span class="l">Cadastros</span><span class="v">${total}</span><span class="s">${open.length} em andamento</span></div>
+      <div class="kpi"><span class="l">Aprovados</span><span class="v" style="color:var(--green)">${apr}</span><span class="s">${apr + rep ? Math.round((apr / (apr + rep)) * 100) : 0}% de aprovação</span></div>
+      <div class="kpi"><span class="l">Reprovados</span><span class="v" style="color:var(--red)">${rep}</span></div>
+      <div class="kpi"><span class="l">SLA em dia</span><span class="v" style="color:${slaPct >= 80 ? 'var(--green)' : slaPct >= 50 ? 'var(--amber)' : 'var(--red)'}">${slaPct}%</span><div class="ind-bar"><div style="width:${slaPct}%;background:var(--green)"></div></div></div>
+      <div class="kpi"><span class="l">SLA vencido</span><span class="v" style="color:var(--red)">${urgent}</span><span class="s">${warning} em alerta</span></div>
+      <div class="kpi"><span class="l">Urgentes</span><span class="v">${open.filter((d) => d.priority === 'urgente').length}</span></div>
+    </div>
+    <div class="grid-3">
+      <div class="es-box"><div class="ql">Funil — médicos em cada etapa</div>${hbars(funnel)}</div>
+      <div class="es-box"><div class="ql">Tempo médio na etapa atual × SLA (horas úteis)</div>${hbars(tempo)}</div>
+      <div class="es-box"><div class="ql">Em andamento por hospital</div>${hbars(byHosp, 'var(--brand)')}</div>
+      <div class="es-box"><div class="ql">Setores</div>${hbars(topSet, 'var(--teal-deep)')}</div>
+      <div class="es-box"><div class="ql">DISC</div>${hbars(DISC.map((k) => ({ l: DISC_LABEL[k], v: list.filter((d) => d.disc === k).length, c: k === 'ADERENTE' ? 'var(--green)' : k === 'REPROVADO' ? 'var(--red)' : k === 'AGUARDANDO RETORNO' ? '#e0a94f' : 'var(--ink-faint)' })))}</div>
+      <div class="es-box"><div class="ql">Formação</div>${hbars(count(list, (d) => d.status_especialidade || 'Sem formação').map(([l, v]) => ({ l, v })), 'var(--brand)')}</div>
+    </div>`;
+  $('#ind-h').onchange = (e) => { IND.hospital = e.target.value; renderIndicadores(); };
+}
+VIEWS.indicadores = renderIndicadores;

@@ -1,4 +1,4 @@
-/* CallMed Flow — Relatórios, Timeline e Auditoria */
+/* CallMed Flow — Relatórios e Auditoria (a linha do tempo virou a Jornada, em fluxo.js) */
 'use strict';
 
 let ACTS = null; // cache de todas as atividades (asc)
@@ -154,7 +154,7 @@ function drawReports(acts, rqes) {
       ${rep.form.sort((a, b) => b.fluxo - a.fluxo).map((f) => `<tr><td><b>${esc(f.nome)}</b></td><td>${f.total}</td><td>${f.fluxo}</td><td>${f.apr}</td><td>${f.rep}</td><td>${f.venc}</td></tr>`).join('')}</tbody></table>`;
   } else if (RF.tab === 'pipe') {
     body = `<table class="t"><thead><tr><th>Médico</th><th>Hospital</th><th>Etapa</th><th>Decorrido / SLA</th><th>Status</th></tr></thead><tbody>
-      ${slaF(rep.slaItems).map((x) => `<tr data-doc="${x.d.id}" style="cursor:pointer"><td>${esc(x.d.name)}</td><td>${esc(x.d.hospital)}</td><td>${esc(stageLabel(x.d.stage))}</td><td>${Math.round(x.elapsed)}h / ${x.sla}h</td><td><span class="slapill ${x.status}">${x.status === 'urgent' ? 'Vencido' : fmtRemaining(x.remaining)}</span></td></tr>`).join('') || '<tr><td colspan="5" class="empty">Nada aqui</td></tr>'}</tbody></table>`;
+      ${slaF(rep.slaItems).map((x) => `<tr class="clk" data-doc="${x.d.id}"><td>${esc(x.d.name)}</td><td>${esc(x.d.hospital)}</td><td>${esc(stageLabel(x.d.stage))}</td><td>${Math.round(x.elapsed)}h / ${x.sla}h</td><td><span class="slapill ${x.status}">${x.status === 'urgent' ? 'Vencido' : fmtRemaining(x.remaining)}</span></td></tr>`).join('') || '<tr><td colspan="5" class="empty">Nada aqui</td></tr>'}</tbody></table>`;
   } else if (RF.tab === 'rqe') {
     body = `<table class="t"><thead><tr><th>Médico</th><th>Hospital</th><th>Etapa</th><th>Especialidade</th><th>Decorrido / SLA</th><th>Status</th></tr></thead><tbody>
       ${slaF(rep.rqeItems).map((x) => `<tr><td>${esc(x.r.doctor?.name)}</td><td>${esc(x.r.doctor?.hospital)}</td><td>${esc(RQE_STAGES.find((s) => s.id === x.r.stage)?.label)}</td><td>${esc(x.r.specialty)}</td><td>${Math.round(x.elapsed)}h / ${x.sla}h</td><td><span class="slapill ${x.status}">${slaTxt(x.status)}</span></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Nada aqui</td></tr>'}</tbody></table>`;
@@ -166,6 +166,7 @@ function drawReports(acts, rqes) {
   }
 
   root.innerHTML = `
+    <div class="pg-head"><h2>📑 Relatórios</h2><span class="sub">Conversão, tempo por etapa, SLA, hospitais e produtividade da equipe — com exportação.</span></div>
     <div class="toolbar">
       <select class="inp" id="rf-period">${opt('7', 'Últimos 7 dias', RF.period)}${opt('30', 'Últimos 30 dias', RF.period)}${opt('90', 'Últimos 90 dias', RF.period)}${opt('all', 'Todo o período', RF.period)}${opt('custom', 'Personalizado', RF.period)}</select>
       ${RF.period === 'custom' ? `<input type="date" class="inp" id="rf-from" value="${RF.from}"><input type="date" class="inp" id="rf-to" value="${RF.to}">` : ''}
@@ -221,100 +222,6 @@ async function exportReport(rep, kind) {
   } catch (e) { toast('Não foi possível gerar o XLSX: ' + e.message, 'err'); }
 }
 
-// ================= TIMELINE =================
-const TL = { days: 14, offset: 0, q: '', hospital: '', showDone: false, group: false, sort: 'dias' };
-
-async function renderTimeline() {
-  const root = $('#view-timeline');
-  root.innerHTML = '<div class="empty">Carregando timeline…</div>';
-  let acts;
-  try { acts = await loadAllActivities(); } catch (e) { root.innerHTML = `<div class="alert r">Erro: ${esc(e.message)}</div>`; return; }
-  drawTimeline(stageEvents(acts));
-}
-VIEWS.timeline = renderTimeline;
-
-function drawTimeline(ev) {
-  const root = $('#view-timeline');
-  const today = new Date(); today.setHours(0, 0, 0, 0);
-  const start = new Date(today); start.setDate(start.getDate() - Math.floor(TL.days / 2) + TL.offset);
-  const days = Array.from({ length: TL.days }, (_, i) => { const d = new Date(start); d.setDate(d.getDate() + i); return d; });
-  const q = norm(TL.q);
-  const daysIn = (d) => Math.floor((Date.now() - new Date(d.entry_date)) / 864e5) + 1;
-  let list = S.doctors.filter((d) => (TL.showDone || !FINAL_STAGES.includes(d.stage)) && (!TL.hospital || d.hospital === TL.hospital) && (!q || norm(d.name).includes(q) || norm(d.hospital).includes(q)));
-  list.sort((a, b) => (TL.sort === 'nome' ? a.name.localeCompare(b.name) : daysIn(b) - daysIn(a)));
-  const all = S.doctors;
-  const apr = all.filter((d) => d.stage === 'aprovado').length, rep = all.filter((d) => d.stage === 'reprovado').length;
-  const crit = all.filter((d) => !FINAL_STAGES.includes(d.stage) && daysIn(d) > 21).length;
-  const dayColor = (n) => (n <= 7 ? 'g' : n <= 14 ? 'a' : n <= 21 ? 'a' : 'r');
-  const W = 64;
-
-  const rowHtml = (d) => {
-    const events = (ev[d.id] || []).slice().sort((a, b) => a.at - b.at);
-    const stageOn = (day) => {
-      const endOfDay = new Date(day); endOfDay.setHours(23, 59, 59, 999);
-      if (new Date(d.entry_date) > endOfDay) return null;
-      let st = 'aguardando_contato';
-      events.forEach((e) => { if (e.at <= endOfDay) st = e.stage; });
-      if (!events.length) st = d.stage;
-      return st;
-    };
-    const segs = [];
-    days.forEach((day, i) => {
-      const st = stageOn(day);
-      if (!st || day > today) return;
-      const last = segs[segs.length - 1];
-      if (last && last.st === st && last.end === i - 1) last.end = i; else segs.push({ st, start: i, end: i });
-    });
-    const n = daysIn(d);
-    return `<div class="tl-row"><div class="tl-name" data-doc="${d.id}"><div class="n">${esc(d.name)}</div><div class="small muted" style="display:flex;gap:6px;align-items:center">${TL.group ? '' : esc(d.hospital) + ' · '}<span class="tag ${dayColor(n)}">${n}d</span></div></div>
-      <div class="tl-days">${days.map((day) => `<div class="tl-day ${[0, 6].includes(day.getDay()) ? 'we' : ''} ${+day === +today ? 'today' : ''}"></div>`).join('')}
-      ${segs.map((s) => { const st = stageById(s.st); const w = (s.end - s.start + 1) * W - 4; return `<div class="tl-bar" style="left:${s.start * W + 2}px;width:${w}px;background:${esc(st?.color || '#999')}" title="${esc(st?.label || s.st)}">${w > 70 ? esc(st?.label || '') : ''}</div>`; }).join('')}</div></div>`;
-  };
-
-  let rows;
-  if (TL.group) {
-    const g = {};
-    list.forEach((d) => { (g[d.hospital] ||= []).push(d); });
-    rows = Object.keys(g).sort().map((h) => `<div class="tl-row" style="background:var(--surface-2);min-height:30px"><div class="tl-name" style="background:var(--surface-2);font-weight:700">${esc(h)} <span class="muted">(${g[h].length})</span></div></div>${g[h].map(rowHtml).join('')}`).join('');
-  } else rows = list.slice(0, 400).map(rowHtml).join('');
-
-  root.innerHTML = `
-    <div class="kpis">
-      <div class="kpi"><div class="l">Total</div><div class="v">${all.length}</div></div>
-      <div class="kpi"><div class="l">Aprovados</div><div class="v">${apr}</div></div>
-      <div class="kpi"><div class="l">Em andamento</div><div class="v">${all.length - apr - rep}</div></div>
-      <div class="kpi"><div class="l">Críticos (&gt;21d)</div><div class="v" style="color:var(--red)">${crit}</div></div>
-      <div class="kpi"><div class="l">Conclusão</div><div class="v">${all.length ? Math.round(((apr + rep) / all.length) * 100) : 0}%</div></div>
-    </div>
-    <div class="toolbar">
-      <input class="inp search" id="tl-q" placeholder="Buscar médico..." value="${esc(TL.q)}">
-      <select class="inp" id="tl-h"><option value="">Todos os hospitais</option>${uniq(S.doctors.map((d) => d.hospital)).sort().map((h) => `<option ${TL.hospital === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select>
-      <select class="inp" id="tl-days">${[[7, '7 dias'], [14, '14 dias'], [30, '30 dias']].map(([v, l]) => `<option value="${v}" ${TL.days === v ? 'selected' : ''}>${l}</option>`).join('')}</select>
-      <button class="btn btn-line btn-sm" id="tl-prev">‹ Semana ant.</button><button class="btn btn-line btn-sm" id="tl-today">Hoje</button><button class="btn btn-line btn-sm" id="tl-next">Próxima ›</button>
-      <label class="small"><input type="checkbox" id="tl-done" ${TL.showDone ? 'checked' : ''}> Concluídos</label>
-      <label class="small"><input type="checkbox" id="tl-group" ${TL.group ? 'checked' : ''}> Agrupar por hospital</label>
-      <select class="inp" id="tl-sort"><option value="dias" ${TL.sort === 'dias' ? 'selected' : ''}>Mais dias primeiro</option><option value="nome" ${TL.sort === 'nome' ? 'selected' : ''}>Nome</option></select>
-      <span class="tag">${list.length} cadastros${!TL.group && list.length > 400 ? ' (mostrando 400)' : ''}</span>
-    </div>
-    <div class="tl">
-      <div class="tl-row tl-head" style="position:sticky;top:0;z-index:3;background:var(--surface)"><div class="tl-name" style="font-weight:700">Médico</div><div class="tl-days">${days.map((d) => `<div class="tl-day ${[0, 6].includes(d.getDay()) ? 'we' : ''} ${+d === +today ? 'today' : ''}">${pad(d.getDate())}/${pad(d.getMonth() + 1)}<br>${['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'][d.getDay()]}</div>`).join('')}</div></div>
-      ${rows || '<div class="empty">Nenhum cadastro</div>'}
-    </div>
-    <div class="small muted" style="margin-top:8px">${S.stages.map((s) => `<span style="display:inline-flex;align-items:center;gap:4px;margin-right:10px"><span class="sdot" style="background:${esc(s.color)}"></span>${esc(s.label)}</span>`).join('')}</div>`;
-  const redraw = () => drawTimeline(ev);
-  let t;
-  $('#tl-q').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { TL.q = e.target.value; redraw(); $('#tl-q').focus(); }, 250); };
-  $('#tl-h').onchange = (e) => { TL.hospital = e.target.value; redraw(); };
-  $('#tl-days').onchange = (e) => { TL.days = +e.target.value; redraw(); };
-  $('#tl-prev').onclick = () => { TL.offset -= 7; redraw(); };
-  $('#tl-next').onclick = () => { TL.offset += 7; redraw(); };
-  $('#tl-today').onclick = () => { TL.offset = 0; redraw(); };
-  $('#tl-done').onchange = (e) => { TL.showDone = e.target.checked; redraw(); };
-  $('#tl-group').onchange = (e) => { TL.group = e.target.checked; redraw(); };
-  $('#tl-sort').onchange = (e) => { TL.sort = e.target.value; redraw(); };
-  $$('#view-timeline [data-doc]').forEach((n) => n.onclick = () => openDoctor(S.doctors.find((d) => d.id === n.dataset.doc)));
-}
-
 // ================= AUDITORIA =================
 const AF = { q: '', user: '', type: '', mod: '' };
 async function renderAudit() {
@@ -338,6 +245,7 @@ function drawAudit(rows) {
   const today = new Date().toDateString();
   const users = uniq(rows.map(who)).sort();
   root.innerHTML = `
+    <div class="pg-head"><h2>🕓 Auditoria</h2><span class="sub">Quem fez o quê, e quando — o nome é registrado pelo banco, não pelo navegador.</span></div>
     <div class="kpis">
       <div class="kpi"><div class="l">Registros carregados</div><div class="v">${rows.length}</div><div class="s">últimas 1.000 ações</div></div>
       <div class="kpi"><div class="l">Hoje</div><div class="v">${rows.filter((a) => new Date(a.created_at).toDateString() === today).length}</div></div>

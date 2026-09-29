@@ -26,6 +26,7 @@ function drawRqe() {
   const q = norm(R.search);
   const list = R.list.filter((r) => !q || norm(r.doctor?.name).includes(q) || norm(r.specialty).includes(q) || norm(r.doctor?.hospital).includes(q));
   root.innerHTML = `
+    <div class="pg-head"><h2>🎓 Solicitações de RQE</h2><span class="sub">Registro de Qualificação de Especialista no CREMESP — do pedido ao protocolo.</span></div>
     <div class="kpis">
       <div class="kpi"><div class="l">Total</div><div class="v">${R.list.length}</div></div>
       <div class="kpi"><div class="l">Aprovados</div><div class="v" style="color:var(--green)">${R.list.filter((r) => r.stage === 'aprovado').length}</div></div>
@@ -90,7 +91,7 @@ async function moveRqe(r, stage) {
 function openNewRqe() {
   let doctor = null;
   const checked = new Set();
-  const m = openModal(`<div class="modal-head"><h2>Nova solicitação RQE</h2><button class="x" data-close>×</button></div><div class="modal-body" id="nr-body"></div>
+  const m = openModal(`<div class="modal-head"><h2>Nova solicitação RQE</h2><button class="x" data-close>✕</button></div><div class="modal-body" id="nr-body"></div>
     <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="nr-ok" disabled>Criar solicitação</button></div>`);
   const el = m.el;
   const step1 = () => {

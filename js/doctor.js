@@ -12,7 +12,7 @@ function friendlyDbError(error, fallback) {
 // ---------- novo médico ----------
 function openNewDoctor() {
   const m = openModal(`
-    <div class="modal-head"><h2>Novo cadastro de médico</h2><button class="x" data-close>×</button></div>
+    <div class="modal-head"><h2>Novo cadastro de médico</h2><button class="x" data-close>✕</button></div>
     <div class="modal-body">
       <div class="form-grid">
         <div class="field full"><label>Nome completo *</label><input class="inp" id="nd-name" placeholder="Dr. / Dra."></div>
@@ -118,210 +118,236 @@ function openNewDoctor() {
   };
 }
 
-// ---------- detalhe ----------
+// ---------- ficha do médico (página inteira, igual à ficha de pessoa do Aliança) ----------
+const PV = { doctor: null, tab: 'resumo', acts: [], docs: [], back: 'fluxo' };
+
 async function openDoctor(d) {
-  let tab = 'info', editing = false, acts = [], docs = [];
-  const m = openModal('<div class="modal-body"><div class="empty">Carregando…</div></div>', { size: 'lg', onClose: () => { if (editing) saveEdit(true); } });
-  const el = m.el;
+  if (!d) return;
+  if (currentView !== 'medico') PV.back = currentView;
+  if (PV.doctor?.id !== d.id) PV.tab = 'resumo';
+  PV.doctor = d;
+  PV.acts = []; PV.docs = [];
+  $$('.modal-bg').forEach((m) => m.remove());
+  go('medico');
+  await loadDoctorDetail();
+  drawMedico();
+}
+async function loadDoctorDetail() {
+  const d = PV.doctor;
+  const [a, dd] = await Promise.all([
+    sb.from('flow_activities').select('*').eq('doctor_id', d.id).order('created_at', { ascending: false }).limit(500),
+    sb.from('flow_doctor_documents').select('*').eq('doctor_id', d.id),
+  ]);
+  PV.acts = a.data || []; PV.docs = dd.data || [];
+}
+VIEWS.medico = () => { if (PV.doctor) drawMedico(); else go('fluxo'); };
 
-  const loadDetail = async () => {
-    const [a, dd] = await Promise.all([
-      sb.from('flow_activities').select('*').eq('doctor_id', d.id).order('created_at', { ascending: false }).limit(500),
-      sb.from('flow_doctor_documents').select('*').eq('doctor_id', d.id),
-    ]);
-    acts = a.data || []; docs = dd.data || [];
-  };
+function pvField(label, val, mono) { return `<div class="cf"><label>${label}</label><div class="v${mono ? ' mono' : ''}">${val || '—'}</div></div>`; }
 
-  const nextStage = () => {
-    const i = S.stages.findIndex((s) => s.id === d.stage);
-    return S.stages.slice(i + 1).find((s) => !FINAL_STAGES.includes(s.id));
-  };
-
-  const header = () => {
-    const sla = FINAL_STAGES.includes(d.stage) ? null : doctorSla(d);
-    const st = stageById(d.stage);
-    return `<div class="modal-head hero"><div>
-        <h2>${esc(d.name)}</h2>
-        <div style="display:flex;gap:5px;flex-wrap:wrap;margin-top:6px">
-          ${d.crm ? `<span class="tag">${esc(d.crm)}</span>` : ''}<span class="tag">${esc(d.hospital)}</span>
-          <span class="tag" style="background:${esc(st?.color || '')}">${esc(st?.label || d.stage)}</span>
-          <button class="tag" id="dd-prio" style="cursor:pointer" title="Clique para alternar urgência">${PRIORITIES[d.priority] || d.priority}</button>
-          ${(d.setores || []).length ? `<span class="tag">${esc(d.setores.join(', '))}</span>` : ''}
-          ${sla ? `<span class="tag">${sla.status === 'urgent' ? 'SLA vencido' : `${Math.max(0, Math.round(sla.remaining))}h restantes`}</span>` : ''}
-        </div></div>
-      <div style="display:flex;gap:6px;align-items:center">
-        <button class="icon-btn" id="dd-send" title="Enviar mensagem">✈</button>
-        <button class="icon-btn" id="dd-copy" title="Replicar para outro hospital">⧉</button>
-        ${S.isAdmin ? '<button class="icon-btn" id="dd-del" title="Excluir médico">🗑</button>' : ''}
-        <button class="x" data-close2>×</button></div></div>`;
-  };
-
-  const infoView = () => {
-    const f = (l, v) => (v === '' || v == null ? '' : `<div><span class="lbl">${l}</span>${esc(v)}</div>`);
-    const yn = (b) => (b ? 'Sim' : 'Não');
-    const nx = nextStage();
-    return `
-      <div class="info-grid">
-        ${f('WhatsApp', d.whatsapp)}${f('CPF', d.cpf)}${f('Estado', d.estado)}${f('RQE', d.rqe)}${f('Status esp.', d.status_especialidade)}
-        ${f('Procuração', yn(d.procuracao))}${f('DISC', d.disc ? DISC_LABEL[d.disc] : '')}${f('APP', yn(d.app))}${f('Link enviado', yn(d.link_enviado))}${f('MedSimples', d.medsimples)}
-        ${f('Cobrança', d.cobranca)}${f('Cobrança 2', d.cobranca2)}${f('Cobrança MedSimples', d.cobranca_medsimples)}${f('Dt. cobrança doc', d.dt_cobranca_doc)}
-        ${f('Dt. e-mail enviado', d.dt_email_enviado)}${f('Dt. resp. hospital', d.dt_resp_hospital)}${f('Entrada', fmtDate(d.entry_date))}
+function drawMedico() {
+  const d = PV.doctor;
+  const root = $('#view-medico');
+  if (!d || !S.doctors.includes(d)) { root.innerHTML = '<div class="op-more">Cadastro não encontrado.</div>'; return; }
+  const st = stageById(d.stage);
+  const sla = FINAL_STAGES.includes(d.stage) ? null : doctorSla(d);
+  const idx = S.stages.findIndex((s) => s.id === d.stage);
+  const next = S.stages.slice(idx + 1).find((s) => !FINAL_STAGES.includes(s.id));
+  const diasEtapa = Math.floor((Date.now() - new Date(d.stage_entered_at)) / 864e5);
+  const nextCls = !sla ? 'done' : sla.status === 'urgent' ? 'late' : sla.status === 'warning' ? 'warn' : '';
+  const TABS = [['resumo', 'Resumo'], ['docs', `Documentos · ${S.docProgress[d.id] || 0}%`], ['historico', `Histórico · ${PV.acts.length}`]];
+  root.innerHTML = `
+    <div class="person-header"><div style="flex:1;min-width:0">
+      <div style="display:flex;align-items:center;gap:12px;flex-wrap:wrap"><button class="btn-ghost" id="pv-back">← ${esc(VIEW_TITLES[PV.back] || 'Fluxo')}</button><h2 style="margin:0">${esc(d.name)}</h2></div>
+      <div class="tags">
+        <span class="ptag brand">${esc(d.hospital)}</span>
+        ${d.crm ? `<span class="ptag">${esc(d.crm)}</span>` : ''}
+        ${(d.setores || []).map((s) => `<span class="ptag">${esc(s)}</span>`).join('')}
+        ${d.status_especialidade ? `<span class="ptag">${esc(d.status_especialidade)}</span>` : ''}
+        <button class="ptag ${d.priority === 'urgente' ? 'bad' : d.priority === 'hospital_novo' ? 'warn' : ''}" id="pv-prio" style="cursor:pointer" title="Clique para alternar urgência">${PRIORITIES[d.priority] || d.priority}</button>
       </div>
-      ${d.doc_pendente ? `<div class="alert a">📄 <b>Doc. pendente:</b> ${esc(d.doc_pendente)}</div>` : ''}
-      ${d.observations ? `<p style="font-style:italic;color:var(--ink-soft)">"${esc(d.observations)}"</p>` : ''}
-      <div class="actions-row">
-        <button class="btn btn-line btn-sm" id="dd-edit">✎ Editar</button>
-        ${nx && !FINAL_STAGES.includes(d.stage) ? `<button class="btn btn-line btn-sm" data-move="${nx.id}">Mover → ${esc(nx.label)}</button>` : ''}
-        <select class="inp" id="dd-movesel" style="width:auto;padding:5px 8px;font-size:12px"><option value="">Mover para…</option>${S.stages.filter((s) => s.id !== d.stage).map((s) => `<option value="${s.id}">${esc(s.label)}</option>`).join('')}</select>
-        ${d.stage !== 'aprovado' ? '<button class="btn btn-green btn-sm" data-move="aprovado">✓ Aprovar</button>' : ''}
-        ${d.stage !== 'reprovado' ? '<button class="btn btn-danger btn-sm" data-move="reprovado">✗ Reprovar</button>' : ''}
-        ${d.whatsapp ? '<button class="btn btn-line btn-sm" id="dd-wa">💬 WhatsApp</button>' : ''}
+      <div class="person-actions">
+        <button class="btn btn-line" id="pa-edit">✏️ Editar cadastro</button>
+        ${d.whatsapp ? '<button class="btn btn-line" id="pa-wa">💬 WhatsApp</button>' : ''}
+        <button class="btn btn-line" id="pa-msg">✉️ Enviar cobrança</button>
+        <button class="btn btn-line" id="pa-copy">⧉ Replicar para outro hospital</button>
+        ${S.isAdmin ? '<button class="btn btn-line" id="pa-del" style="color:var(--red)">🗑 Excluir</button>' : ''}
       </div>
-      <div id="dd-wa-box"></div>
-      <h3 style="font-size:.9rem;margin:16px 0 8px">Notas e histórico</h3>
-      <div style="display:flex;gap:6px;margin-bottom:12px"><input class="inp" id="dd-note" placeholder="Adicionar nota ou atividade..."><button class="btn btn-primary btn-sm" id="dd-note-ok">＋</button></div>
-      <div class="hist">${acts.map((a) => `<div class="it">${esc(a.description)}<div class="m">${fmtFull(a.created_at)} · por ${esc(a.created_by_name || 'Sistema')}</div></div>`).join('') || '<div class="empty">Sem histórico</div>'}</div>`;
-  };
+      <div class="pv-next ${nextCls}">
+        <div><b>Etapa atual:</b> <span class="op-dot" style="display:inline-block;background:${esc(st?.color || '#999')};margin:0 4px"></span>${esc(st?.label || d.stage)} · há ${diasEtapa} dia(s)
+          ${sla ? ` · ${sla.status === 'urgent' ? '<span class="tagx bad">SLA vencido</span>' : `<span class="tagx ${sla.status === 'warning' ? 'warn' : ''}">SLA: ${fmtRemaining(sla.remaining)} restantes</span>`}` : ''}</div>
+        <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          ${next ? `<button class="btn btn-line btn-sm" data-move="${next.id}">Mover → ${esc(next.label)}</button>` : ''}
+          <select class="inp" id="pv-movesel" style="width:auto;padding:6px 8px;font-size:12.5px"><option value="">Mover para…</option>${S.stages.filter((s) => s.id !== d.stage).map((s) => `<option value="${s.id}">${esc(s.label)}</option>`).join('')}</select>
+          ${d.stage !== 'aprovado' ? '<button class="btn btn-green btn-sm" data-move="aprovado">✓ Aprovar</button>' : ''}
+          ${d.stage !== 'reprovado' ? '<button class="btn btn-danger btn-sm" data-move="reprovado">✗ Reprovar</button>' : ''}
+        </div>
+      </div>
+      <div id="pv-wa-box"></div>
+    </div></div>
+    <div class="pv-tabs">${TABS.map(([k, l]) => `<button class="pv-tab ${PV.tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
+    <div id="pv-body"></div>`;
 
-  const editView = () => {
-    const i = (id, l, v, extra = '') => `<div class="field"><label>${l}</label><input class="inp" id="${id}" value="${esc(v)}" ${extra}></div>`;
-    const sel = (id, l, opts, v) => `<div class="field"><label>${l}</label><select class="inp" id="${id}">${opts.map(([k, t]) => `<option value="${esc(k)}" ${k === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
-    return `<div class="form-grid">
-      ${i('ed-name', 'Nome', d.name)}${i('ed-crm', 'CRM', d.crm)}${i('ed-cpf', 'CPF', d.cpf)}${i('ed-wa', 'WhatsApp', d.whatsapp)}
-      <div class="field"><label>Hospital</label><select class="inp" id="ed-hosp">${hospitalOptions(d.hospital)}</select></div>
-      ${i('ed-rqe', 'RQE', d.rqe)}${i('ed-uf', 'Estado', d.estado, 'maxlength="2"')}
-      ${sel('ed-status', 'Status especialidade', [['', '(Vazio)'], ...STATUS_ESP.map((s) => [s, s])], d.status_especialidade)}
-      ${sel('ed-disc', 'DISC', [['', '(Vazio)'], ...DISC.map((s) => [s, DISC_LABEL[s]])], d.disc)}
-      ${sel('ed-med', 'MedSimples', [['', '(Vazio)'], ['Sim', 'Sim'], ['Não', 'Não']], d.medsimples)}
-      <div class="field full"><label>Setor</label><div class="checks" id="ed-setores">${SETORES.map((s) => `<label class="${(d.setores || []).includes(s) ? 'on' : ''}"><input type="checkbox" value="${esc(s)}" ${(d.setores || []).includes(s) ? 'checked' : ''}> ${esc(s)}</label>`).join('')}</div></div>
-      <div class="full switches"><label><input type="checkbox" id="ed-app" ${d.app ? 'checked' : ''}> APP</label><label><input type="checkbox" id="ed-proc" ${d.procuracao ? 'checked' : ''}> Procuração</label><label><input type="checkbox" id="ed-link" ${d.link_enviado ? 'checked' : ''}> Link enviado</label></div>
-      ${i('ed-docpend', 'Doc. pendente', d.doc_pendente)}${i('ed-cob', 'Cobrança', d.cobranca)}${i('ed-cobmed', 'Cobrança MedSimples', d.cobranca_medsimples)}${i('ed-cob2', 'Cobrança 2', d.cobranca2)}
-      ${i('ed-dtdoc', 'Dt. cobrança doc', d.dt_cobranca_doc)}${i('ed-dtmail', 'Dt. e-mail enviado', d.dt_email_enviado)}${i('ed-dtresp', 'Dt. resp. hospital', d.dt_resp_hospital)}
-      <div class="field full"><label>Observações</label><textarea class="inp" id="ed-obs">${esc(d.observations)}</textarea></div>
+  $('#pv-back').onclick = () => go(PV.back || 'fluxo');
+  $$('.pv-tab', root).forEach((b) => b.onclick = () => { PV.tab = b.dataset.tab; drawMedico(); });
+  $('#pv-prio').onclick = async () => {
+    const np = d.priority === 'urgente' ? 'rotina' : 'urgente';
+    if (await updateDoctor(d, { priority: np }, `Prioridade alterada para ${PRIORITIES[np]}`)) { await loadDoctorDetail(); drawMedico(); }
+  };
+  $('#pa-edit').onclick = () => editDoctorDialog(d);
+  $('#pa-msg').onclick = () => openMessages(d);
+  $('#pa-copy').onclick = () => replicate(d);
+  const del = $('#pa-del'); if (del) del.onclick = () => deleteDoctor(d);
+  const wa = $('#pa-wa');
+  if (wa) wa.onclick = () => {
+    $('#pv-wa-box').innerHTML = `<div class="es-box" style="margin-top:10px"><div class="ql">Mensagem personalizada · variáveis {nome} {hospital} {especialidade} {crm}</div>
+      <textarea class="inp" id="wa-txt" maxlength="500">Olá, {nome}! Tudo bem? Entramos em contato referente ao seu cadastro no hospital {hospital}.</textarea>
+      <div class="actions-row" style="margin-bottom:0"><button class="btn btn-primary btn-sm" id="wa-go">Abrir WhatsApp</button></div></div>`;
+    $('#wa-go').onclick = async () => {
+      window.open(waLink(d.whatsapp, fillTemplate($('#wa-txt').value, d)), '_blank');
+      await sb.from('flow_activities').insert({ doctor_id: d.id, type: 'contact', description: 'Mensagem de WhatsApp enviada' });
+      await loadDoctorDetail(); drawMedico();
+    };
+  };
+  $$('[data-move]', root).forEach((b) => b.onclick = async () => { if (await moveDoctor(d, b.dataset.move)) { await loadDoctorDetail(); drawMedico(); } });
+  $('#pv-movesel').onchange = async (e) => { if (e.target.value && await moveDoctor(d, e.target.value)) { await loadDoctorDetail(); drawMedico(); } };
+
+  const body = $('#pv-body');
+  if (PV.tab === 'docs') return drawDocsTab(body, d);
+  if (PV.tab === 'historico') return drawHistTab(body, d);
+  drawResumoTab(body, d);
+}
+
+function drawResumoTab(body, d) {
+  const yn = (b) => (b ? 'Sim' : 'Não');
+  const diasFluxo = Math.floor((Date.now() - new Date(d.entry_date)) / 864e5) + 1;
+  const contatos = PV.acts.filter((a) => a.type === 'contact' || a.type === 'cobranca').length;
+  const wa = d.whatsapp ? `${esc(d.whatsapp)} <a href="${waLink(d.whatsapp, '')}" target="_blank" rel="noopener" title="Abrir WhatsApp">💬</a>` : '';
+  body.innerHTML = `
+    <div class="activity-strip" style="margin:0 0 14px">
+      <div class="astat"><span class="an">${diasFluxo}</span><span class="al">Dias no fluxo</span></div>
+      <div class="astat"><span class="an">${S.docProgress[d.id] || 0}%</span><span class="al">Documentos</span></div>
+      <div class="astat"><span class="an">${contatos}</span><span class="al">Contatos / cobranças</span></div>
+      <div class="astat"><span class="an">${PV.acts.length}</span><span class="al">Registros no histórico</span></div>
+      <div class="astat"><span class="an">${fmtDate(d.entry_date)}</span><span class="al">Entrada</span></div>
     </div>
-    <div class="actions-row"><button class="btn btn-primary btn-sm" id="ed-save">Salvar</button><button class="btn btn-line btn-sm" id="ed-cancel">Cancelar</button></div>`;
-  };
+    ${d.doc_pendente ? `<div class="es-box" style="background:var(--amber-soft);border-color:var(--amber-line)"><div class="ql" style="color:var(--amber-ink)">📄 Documento pendente</div>${esc(d.doc_pendente)}</div>` : ''}
+    <div class="pv-grid">
+      <div class="es-box"><div class="ql">Dados do médico</div><div class="core-fields">
+        ${pvField('Nome', esc(d.name))}${pvField('CPF', esc(d.cpf), true)}${pvField('CRM', esc(d.crm), true)}${pvField('UF', esc(d.estado))}
+        ${pvField('WhatsApp', wa)}${pvField('RQE', esc(d.rqe))}${pvField('Formação', esc(d.status_especialidade))}${pvField('Setores', esc((d.setores || []).join(', ')))}
+      </div></div>
+      <div class="es-box"><div class="ql">Credenciamento · ${esc(d.hospital)}</div><div class="core-fields">
+        ${pvField('DISC', d.disc ? esc(DISC_LABEL[d.disc]) : '')}${pvField('MedSimples', esc(d.medsimples))}${pvField('APP', yn(d.app))}${pvField('Procuração', yn(d.procuracao))}
+        ${pvField('Link enviado', yn(d.link_enviado))}${pvField('Cobrança', esc(d.cobranca))}${pvField('Cobrança 2', esc(d.cobranca2))}${pvField('Cobrança MedSimples', esc(d.cobranca_medsimples))}
+        ${pvField('Dt. cobrança doc.', esc(d.dt_cobranca_doc))}${pvField('Dt. e-mail enviado', esc(d.dt_email_enviado))}${pvField('Dt. resposta hospital', esc(d.dt_resp_hospital))}
+      </div></div>
+    </div>
+    ${d.observations ? `<div class="es-box"><div class="ql">Observações</div><div style="font-size:13.5px;line-height:1.55;white-space:pre-wrap">${esc(d.observations)}</div></div>` : ''}
+    <div class="es-box"><div class="ql">Outros cadastros deste médico</div>${otherHospitals(d)}</div>`;
+  $$('#pv-body [data-other]').forEach((a) => a.onclick = (e) => { e.preventDefault(); openDoctor(S.doctors.find((x) => x.id === a.dataset.other)); });
+}
+function otherHospitals(d) {
+  const nm = norm(d.name), crm = digits(d.crm);
+  const others = S.doctors.filter((x) => x.id !== d.id && (norm(x.name) === nm || (crm.length >= 3 && digits(x.crm) === crm)));
+  if (!others.length) return '<div class="hint" style="margin:0">Cadastrado só neste hospital.</div>';
+  return others.map((x) => `<div style="padding:4px 0"><a href="#" data-other="${x.id}" style="color:var(--brand);font-weight:600">${esc(x.hospital)}</a> · ${esc(stageLabel(x.stage))}</div>`).join('');
+}
 
-  const docsView = () => {
-    const byName = Object.fromEntries(docs.map((x) => [x.document_name, x]));
-    const isRec = (n) => ['enviado', 'aprovado'].includes(byName[n]?.status);
-    const rec = REQUIRED_DOCUMENTS.filter(isRec).length;
-    const pct = Math.round((rec / REQUIRED_DOCUMENTS.length) * 100);
-    return `
-      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><b>Documentos</b><span class="tag ${pct === 100 ? 'g' : ''}">${rec}/${REQUIRED_DOCUMENTS.length}</span><span class="prog"><i style="width:${pct}%;background:${pct === 100 ? 'var(--green)' : pct >= 50 ? 'var(--brand)' : '#e0a94f'}"></i></span><b>${pct}%</b></div>
-      <div class="toolbar"><input class="inp search" id="dc-q" placeholder="Buscar documento..."><select class="inp" id="dc-f"><option value="">Todos</option><option value="p">Pendentes</option><option value="r">Recebidos</option></select><button class="btn btn-line btn-sm" id="dc-all">Marcar filtrados como recebidos</button></div>
+function drawHistTab(body, d) {
+  const ICON = { stage_change: '➡️', note: '📝', doc: '📄', contact: '💬', cobranca: '✉️', admin: '⚙️' };
+  body.innerHTML = `
+    <div class="es-box"><div class="ql">Registrar atividade</div>
+      <div style="display:flex;gap:6px"><input class="inp" id="pv-note" placeholder="Nota, ligação, retorno do hospital..."><button class="btn btn-primary btn-sm" id="pv-note-ok">Registrar</button></div></div>
+    <div class="es-box"><div class="ql">Histórico · mais recente primeiro</div>
+      <div class="hist">${PV.acts.map((a) => `<div class="it">${ICON[a.type] || '•'} ${esc(a.description)}<div class="m">${fmtFull(a.created_at)} · por ${esc(a.created_by_name || 'Sistema')}</div></div>`).join('') || '<div class="empty">Sem histórico</div>'}</div></div>`;
+  const add = async () => {
+    const t = $('#pv-note').value.trim();
+    if (!t) return;
+    const { error } = await sb.from('flow_activities').insert({ doctor_id: d.id, type: 'note', description: t });
+    if (error) return toast('Erro ao salvar: ' + error.message, 'err');
+    await loadDoctorDetail(); drawMedico();
+  };
+  $('#pv-note-ok').onclick = add;
+  $('#pv-note').onkeydown = (e) => { if (e.key === 'Enter') add(); };
+}
+
+function drawDocsTab(body, d) {
+  const byName = Object.fromEntries(PV.docs.map((x) => [x.document_name, x]));
+  const isRec = (n) => ['enviado', 'aprovado'].includes(byName[n]?.status);
+  const rec = REQUIRED_DOCUMENTS.filter(isRec).length;
+  const pct = Math.round((rec / REQUIRED_DOCUMENTS.length) * 100);
+  body.innerHTML = `
+    <div class="es-box">
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px"><span class="ql" style="margin:0">Checklist de documentos</span><span class="tagx ${pct === 100 ? 'ok' : ''}">${rec}/${REQUIRED_DOCUMENTS.length}</span><span class="prog"><i style="width:${pct}%;background:${pct === 100 ? 'var(--green)' : pct >= 50 ? 'var(--brand)' : '#e0a94f'}"></i></span><b>${pct}%</b></div>
+      <div class="op-filters" style="margin-bottom:8px"><input id="dc-q" placeholder="Buscar documento..."><select id="dc-f"><option value="">Todos</option><option value="p">Pendentes</option><option value="r">Recebidos</option></select><button id="dc-all">Marcar filtrados como recebidos</button></div>
       <div id="dc-list">${REQUIRED_DOCUMENTS.map((n) => {
         const r = isRec(n);
-        return `<label class="doc-row ${r ? 'done' : ''}" data-doc="${esc(n)}"><input type="checkbox" ${r ? 'checked' : ''}><span class="dn">${esc(n)}</span>${r ? `<span class="muted small">✓ ${fmtDate(byName[n].updated_at, true)}</span><span class="tag g">Recebido</span>` : '<span class="tag a">Pendente</span>'}</label>`;
+        return `<label class="doc-row ${r ? 'done' : ''}" data-doc="${esc(n)}"><input type="checkbox" ${r ? 'checked' : ''}><span class="dn">${esc(n)}</span>${r ? `<span class="muted small">✓ ${fmtDate(byName[n].updated_at, true)}</span><span class="tagx ok">Recebido</span>` : '<span class="tagx warn">Pendente</span>'}</label>`;
       }).join('')}</div>
-      <h3 style="font-size:.85rem;margin:14px 0 6px">Checklist adicional</h3>
-      <div class="switches"><label><input type="checkbox" id="dc-app" ${d.app ? 'checked' : ''}> APP</label><label><input type="checkbox" id="dc-proc" ${d.procuracao ? 'checked' : ''}> Procuração</label></div>`;
+    </div>
+    <div class="es-box"><div class="ql">Checklist adicional</div>
+      <div class="switches"><label><input type="checkbox" id="dc-app" ${d.app ? 'checked' : ''}> APP</label><label><input type="checkbox" id="dc-proc" ${d.procuracao ? 'checked' : ''}> Procuração</label><label><input type="checkbox" id="dc-link" ${d.link_enviado ? 'checked' : ''}> Link enviado</label></div></div>`;
+  const apply = () => {
+    const q = norm($('#dc-q').value), f = $('#dc-f').value;
+    $$('.doc-row', body).forEach((r) => {
+      const done = r.classList.contains('done');
+      r.hidden = (q && !norm(r.dataset.doc).includes(q)) || (f === 'p' && done) || (f === 'r' && !done);
+    });
   };
+  $('#dc-q').oninput = apply; $('#dc-f').onchange = apply;
+  $$('.doc-row input', body).forEach((c) => c.onchange = () => setDocs(d, [c.closest('.doc-row').dataset.doc], c.checked));
+  $('#dc-all').onclick = () => setDocs(d, $$('.doc-row', body).filter((r) => !r.hidden && !r.classList.contains('done')).map((r) => r.dataset.doc), true);
+  const tgl = (id, field, label) => { $(id).onchange = async (e) => { if (await updateDoctor(d, { [field]: e.target.checked }, `${label} ${e.target.checked ? 'marcado' : 'desmarcado'}`)) { await loadDoctorDetail(); drawMedico(); } }; };
+  tgl('#dc-app', 'app', 'APP'); tgl('#dc-proc', 'procuracao', 'Procuração'); tgl('#dc-link', 'link_enviado', 'Link enviado');
+}
+async function setDocs(d, names, received) {
+  if (!names.length) return;
+  const rows = names.map((n) => ({ doctor_id: d.id, document_name: n, status: received ? 'enviado' : 'nao_enviado', updated_by: S.user.id }));
+  const { error } = await sb.from('flow_doctor_documents').upsert(rows, { onConflict: 'doctor_id,document_name' });
+  if (error) return toast('Erro ao atualizar documentos: ' + error.message, 'err');
+  await sb.from('flow_activities').insert({ doctor_id: d.id, type: 'doc', description: `${received ? 'Recebido' : 'Pendente'}: ${names.join(', ')}` });
+  await loadDoctorDetail();
+  const rec = PV.docs.filter((x) => ['enviado', 'aprovado'].includes(x.status) && REQUIRED_DOCUMENTS.includes(x.document_name)).length;
+  S.docProgress[d.id] = Math.round((rec / REQUIRED_DOCUMENTS.length) * 100);
+  drawMedico();
+}
 
-  const draw = () => {
-    const modal = $('.modal', el);
-    modal.innerHTML = header() + `<div class="tabs" style="padding:0 20px;margin:0"><button data-tab="info" class="${tab === 'info' ? 'active' : ''}">Informações</button><button data-tab="docs" class="${tab === 'docs' ? 'active' : ''}">Documentos</button></div>
-      <div class="modal-body">${tab === 'docs' ? docsView() : editing ? editView() : infoView()}</div>`;
-    $('[data-close2]', modal).onclick = m.close;
-    $$('[data-tab]', modal).forEach((b) => b.onclick = async () => { if (editing) await saveEdit(true); tab = b.dataset.tab; draw(); });
-    $('#dd-prio', modal).onclick = async () => {
-      const np = d.priority === 'urgente' ? 'rotina' : 'urgente';
-      if (await updateDoctor(d, { priority: np }, `Prioridade alterada para ${PRIORITIES[np]}`)) draw();
+function editDoctorDialog(d) {
+  const i = (id, l, v, extra = '') => `<div class="field"><label>${l}</label><input class="inp" id="${id}" value="${esc(v)}" ${extra}></div>`;
+  const sel = (id, l, opts, v) => `<div class="field"><label>${l}</label><select class="inp" id="${id}">${opts.map(([k, t]) => `<option value="${esc(k)}" ${k === v ? 'selected' : ''}>${esc(t)}</option>`).join('')}</select></div>`;
+  const m = openModal(`
+    <div class="modal-head"><div><h2>Editar cadastro</h2><div class="om-sub">${esc(d.name)} · ${esc(d.hospital)}</div></div><button class="x" data-close>✕</button></div>
+    <div class="modal-body"><div class="form-grid">
+      ${i('ed-name', 'Nome', d.name)}${i('ed-crm', 'CRM', d.crm)}${i('ed-cpf', 'CPF', d.cpf)}${i('ed-wa', 'WhatsApp', d.whatsapp)}
+      <div class="field"><label>Hospital</label><select class="inp" id="ed-hosp">${hospitalOptions(d.hospital)}</select></div>
+      ${i('ed-rqe', 'RQE', d.rqe)}${i('ed-uf', 'UF', d.estado, 'maxlength="2"')}
+      ${sel('ed-status', 'Formação', [['', '(Vazio)'], ...STATUS_ESP.map((s) => [s, s])], d.status_especialidade)}
+      ${sel('ed-disc', 'DISC', [['', '(Vazio)'], ...DISC.map((s) => [s, DISC_LABEL[s]])], d.disc)}
+      ${sel('ed-med', 'MedSimples', [['', '(Vazio)'], ['Sim', 'Sim'], ['Não', 'Não']], d.medsimples)}
+      <div class="field full"><label>Setores</label><div class="checks" id="ed-setores">${uniq([...SETORES, ...(d.setores || [])]).map((s) => `<label class="${(d.setores || []).includes(s) ? 'on' : ''}"><input type="checkbox" value="${esc(s)}" ${(d.setores || []).includes(s) ? 'checked' : ''}> ${esc(s)}</label>`).join('')}</div></div>
+      ${i('ed-docpend', 'Doc. pendente', d.doc_pendente)}${i('ed-cob', 'Cobrança', d.cobranca)}${i('ed-cobmed', 'Cobrança MedSimples', d.cobranca_medsimples)}${i('ed-cob2', 'Cobrança 2', d.cobranca2)}
+      ${i('ed-dtdoc', 'Dt. cobrança doc.', d.dt_cobranca_doc)}${i('ed-dtmail', 'Dt. e-mail enviado', d.dt_email_enviado)}${i('ed-dtresp', 'Dt. resposta hospital', d.dt_resp_hospital)}
+      <div class="field full"><label>Observações</label><textarea class="inp" id="ed-obs">${esc(d.observations)}</textarea></div>
+    </div></div>
+    <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="ed-save">Salvar</button></div>`, { size: 'lg' });
+  const el = m.el;
+  $$('#ed-setores input', el).forEach((c) => c.onchange = () => c.parentElement.classList.toggle('on', c.checked));
+  $('#ed-name', el).onblur = (e) => { e.target.value = sanitizeName(e.target.value); };
+  $('#ed-save', el).onclick = async () => {
+    const patch = {
+      name: sanitizeName($('#ed-name', el).value), crm: $('#ed-crm', el).value.trim(), cpf: $('#ed-cpf', el).value.trim(),
+      whatsapp: $('#ed-wa', el).value.trim(), hospital: $('#ed-hosp', el).value, rqe: $('#ed-rqe', el).value.trim(),
+      estado: $('#ed-uf', el).value.trim().toUpperCase(), status_especialidade: $('#ed-status', el).value, disc: $('#ed-disc', el).value,
+      medsimples: $('#ed-med', el).value, setores: $$('#ed-setores input:checked', el).map((x) => x.value),
+      doc_pendente: $('#ed-docpend', el).value.trim(), cobranca: $('#ed-cob', el).value.trim(), cobranca_medsimples: $('#ed-cobmed', el).value.trim(),
+      cobranca2: $('#ed-cob2', el).value.trim(), dt_cobranca_doc: $('#ed-dtdoc', el).value.trim(), dt_email_enviado: $('#ed-dtmail', el).value.trim(),
+      dt_resp_hospital: $('#ed-dtresp', el).value.trim(), observations: $('#ed-obs', el).value.trim(),
     };
-    $('#dd-send', modal).onclick = () => { m.close(); openMessages(d); };
-    $('#dd-copy', modal).onclick = () => replicate(d, m);
-    const del = $('#dd-del', modal);
-    if (del) del.onclick = () => deleteDoctor(d, m);
-    if (tab === 'docs') return bindDocs(modal);
-    if (editing) return bindEdit(modal);
-    bindInfo(modal);
-  };
-
-  const bindInfo = (modal) => {
-    $('#dd-edit', modal).onclick = () => { editing = true; draw(); };
-    $$('[data-move]', modal).forEach((b) => b.onclick = async () => { if (await moveDoctor(d, b.dataset.move)) { await loadDetail(); draw(); } });
-    $('#dd-movesel', modal).onchange = async (e) => { if (e.target.value && await moveDoctor(d, e.target.value)) { await loadDetail(); draw(); } };
-    const wa = $('#dd-wa', modal);
-    if (wa) wa.onclick = () => {
-      $('#dd-wa-box', modal).innerHTML = `<div class="panel" style="margin-bottom:10px"><div class="lbl" style="margin-bottom:6px">Mensagem personalizada · variáveis {nome} {hospital} {especialidade} {crm}</div>
-        <textarea class="inp" id="wa-txt" maxlength="500">Olá, {nome}! Tudo bem? Entramos em contato referente ao seu cadastro no hospital {hospital}.</textarea>
-        <div class="actions-row"><button class="btn btn-primary btn-sm" id="wa-go">Enviar mensagem</button></div></div>`;
-      $('#wa-go', modal).onclick = () => {
-        window.open(waLink(d.whatsapp, fillTemplate($('#wa-txt', modal).value, d)), '_blank');
-        sb.from('flow_activities').insert({ doctor_id: d.id, type: 'contact', description: 'Mensagem de WhatsApp enviada' }).then(() => loadDetail().then(draw));
-      };
-    };
-    const addNote = async () => {
-      const t = $('#dd-note', modal).value.trim();
-      if (!t) return;
-      const { error } = await sb.from('flow_activities').insert({ doctor_id: d.id, type: 'note', description: t });
-      if (error) return toast('Erro ao salvar nota: ' + error.message, 'err');
-      await loadDetail(); draw();
-    };
-    $('#dd-note-ok', modal).onclick = addNote;
-    $('#dd-note', modal).onkeydown = (e) => { if (e.key === 'Enter') addNote(); };
-  };
-
-  const collectEdit = (modal) => ({
-    name: sanitizeName($('#ed-name', modal).value), crm: $('#ed-crm', modal).value.trim(), cpf: $('#ed-cpf', modal).value.trim(),
-    whatsapp: $('#ed-wa', modal).value.trim(), hospital: $('#ed-hosp', modal).value, rqe: $('#ed-rqe', modal).value.trim(),
-    estado: $('#ed-uf', modal).value.trim().toUpperCase(), status_especialidade: $('#ed-status', modal).value, disc: $('#ed-disc', modal).value,
-    medsimples: $('#ed-med', modal).value, setores: $$('#ed-setores input:checked', modal).map((x) => x.value),
-    app: $('#ed-app', modal).checked, procuracao: $('#ed-proc', modal).checked, link_enviado: $('#ed-link', modal).checked,
-    doc_pendente: $('#ed-docpend', modal).value.trim(), cobranca: $('#ed-cob', modal).value.trim(), cobranca_medsimples: $('#ed-cobmed', modal).value.trim(),
-    cobranca2: $('#ed-cob2', modal).value.trim(), dt_cobranca_doc: $('#ed-dtdoc', modal).value.trim(), dt_email_enviado: $('#ed-dtmail', modal).value.trim(),
-    dt_resp_hospital: $('#ed-dtresp', modal).value.trim(), observations: $('#ed-obs', modal).value.trim(),
-  });
-  let pendingEdit = null;
-  const bindEdit = (modal) => {
-    $$('#ed-setores input', modal).forEach((i) => i.onchange = () => i.parentElement.classList.toggle('on', i.checked));
-    const snap = () => { pendingEdit = collectEdit(modal); };
-    modal.addEventListener('input', snap); modal.addEventListener('change', snap);
-    $('#ed-name', modal).onblur = (e) => { e.target.value = sanitizeName(e.target.value); };
-    $('#ed-save', modal).onclick = () => saveEdit(false);
-    $('#ed-cancel', modal).onclick = () => { editing = false; pendingEdit = null; draw(); };
-  };
-  /** Salva a edição. Fechar o diálogo em modo edição salva automaticamente (comportamento do Flow original). */
-  async function saveEdit(silentClose) {
-    const modal = $('.modal', el);
-    const patch = modal && $('#ed-name', modal) ? collectEdit(modal) : pendingEdit;
-    editing = false;
-    if (!patch) return;
-    pendingEdit = null;
+    if (!patch.name) return toast('Informe o nome.', 'err');
     const changed = Object.keys(patch).some((k) => JSON.stringify(patch[k]) !== JSON.stringify(d[k]));
-    if (!changed) { if (!silentClose) draw(); return; }
-    const ok = await updateDoctor(d, patch, 'Cadastro atualizado');
-    if (!silentClose) { if (!ok) editing = true; await loadDetail(); draw(); }
-  }
-
-  const bindDocs = (modal) => {
-    const apply = () => {
-      const q = norm($('#dc-q', modal).value), f = $('#dc-f', modal).value;
-      $$('.doc-row', modal).forEach((r) => {
-        const done = r.classList.contains('done');
-        r.hidden = (q && !norm(r.dataset.doc).includes(q)) || (f === 'p' && done) || (f === 'r' && !done);
-      });
-    };
-    $('#dc-q', modal).oninput = apply; $('#dc-f', modal).onchange = apply;
-    $$('.doc-row input', modal).forEach((c) => c.onchange = () => setDocs([c.closest('.doc-row').dataset.doc], c.checked));
-    $('#dc-all', modal).onclick = () => setDocs($$('.doc-row', modal).filter((r) => !r.hidden && !r.classList.contains('done')).map((r) => r.dataset.doc), true);
-    $('#dc-app', modal).onchange = (e) => updateDoctor(d, { app: e.target.checked }, `APP ${e.target.checked ? 'marcado' : 'desmarcado'}`);
-    $('#dc-proc', modal).onchange = (e) => updateDoctor(d, { procuracao: e.target.checked }, `Procuração ${e.target.checked ? 'marcada' : 'desmarcada'}`);
+    if (!changed) return m.close();
+    if (await updateDoctor(d, patch, 'Cadastro atualizado')) { m.close(); await loadDoctorDetail(); drawMedico(); toast('Cadastro atualizado', 'ok'); }
   };
-  async function setDocs(names, received) {
-    if (!names.length) return;
-    const rows = names.map((n) => ({ doctor_id: d.id, document_name: n, status: received ? 'enviado' : 'nao_enviado', updated_by: S.user.id }));
-    const { error } = await sb.from('flow_doctor_documents').upsert(rows, { onConflict: 'doctor_id,document_name' });
-    if (error) return toast('Erro ao atualizar documentos: ' + error.message, 'err');
-    await sb.from('flow_activities').insert({ doctor_id: d.id, type: 'doc', description: `${received ? 'Recebido' : 'Pendente'}: ${names.join(', ')}` });
-    await loadDetail();
-    const rec = docs.filter((x) => ['enviado', 'aprovado'].includes(x.status) && REQUIRED_DOCUMENTS.includes(x.document_name)).length;
-    S.docProgress[d.id] = Math.round((rec / REQUIRED_DOCUMENTS.length) * 100);
-    draw(); afterDoctorChange();
-  }
-
-  await loadDetail();
-  draw();
 }
 
 /** Atualiza campos do médico e registra no histórico (o banco gera a notificação para "Cadastro atualizado"). */
@@ -334,9 +360,9 @@ async function updateDoctor(d, patch, description = 'Cadastro atualizado') {
   return true;
 }
 
-function replicate(d, parent) {
+function replicate(d) {
   const m = openModal(`
-    <div class="modal-head"><h2>Replicar cadastro</h2><button class="x" data-close>×</button></div>
+    <div class="modal-head"><div><h2>Replicar cadastro</h2><div class="om-sub">${esc(d.name)}</div></div><button class="x" data-close>✕</button></div>
     <div class="modal-body"><p style="margin-top:0">Será criado um novo cadastro de <b>${esc(d.name)}</b> em outro hospital, mantendo os dados pessoais. O fluxo recomeça em "Aguardando Contato".</p>
       <div class="field"><label>Novo hospital</label><select class="inp" id="rp-h"><option value="">Selecione…</option>${S.hospitals.filter((h) => h.ativo && h.nome !== d.hospital).map((h) => `<option>${esc(h.nome)}</option>`).join('')}</select></div></div>
     <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="rp-ok">Replicar</button></div>`, { size: 'sm' });
@@ -354,18 +380,18 @@ function replicate(d, parent) {
     S.doctors.unshift(data); S.docProgress[data.id] = 0;
     await sb.from('flow_activities').insert({ doctor_id: data.id, type: 'stage_change', description: 'Cadastro criado no sistema' });
     toast(`Cadastro replicado para ${h}`, 'ok');
-    m.close(); parent.close(); afterDoctorChange();
+    m.close(); openDoctor(data);
   };
 }
 
-async function deleteDoctor(d, parent) {
+async function deleteDoctor(d) {
   if (!(await confirmDlg('Excluir médico', `Tem certeza que deseja excluir ${d.name}? Esta ação não pode ser desfeita e todos os dados relacionados serão removidos.`, { okText: 'Excluir', danger: true }))) return;
   const { error, count } = await sb.from('flow_doctors').delete({ count: 'exact' }).eq('id', d.id);
   if (error) return toast('Erro ao excluir médico: ' + error.message, 'err');
   if (!count) return toast('Você não tem permissão para excluir este médico.', 'err');
   S.doctors = S.doctors.filter((x) => x.id !== d.id);
   toast('Médico excluído com sucesso!', 'ok');
-  parent.close(); afterDoctorChange();
+  PV.doctor = null; go(PV.back && PV.back !== 'medico' ? PV.back : 'fluxo');
 }
 
 // ---------- mensagens / cobranças ----------
@@ -373,7 +399,7 @@ function openMessages(single) {
   let channel = 'wa', stage = single ? single.stage : 'aguardando_contato';
   const sel = new Set(single ? [single.id] : []);
   const m = openModal(`
-    <div class="modal-head"><h2>${single ? 'Enviar mensagem' : 'Disparar cobranças / avisos'}</h2><button class="x" data-close>×</button></div>
+    <div class="modal-head"><h2>${single ? 'Enviar mensagem' : 'Disparar cobranças / avisos'}</h2><button class="x" data-close>✕</button></div>
     <div class="modal-body" id="ms-body"></div>
     <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="ms-send"></button></div>`, { size: 'lg' });
   const el = m.el;

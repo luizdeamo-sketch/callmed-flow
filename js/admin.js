@@ -18,7 +18,7 @@ async function renderAdmin() {
   if (!S.isAdmin) { root.innerHTML = '<div class="alert r">Acesso restrito a administradores.</div>'; return; }
   await loadCore().catch(() => {});
   const tabs = [['usuarios', 'Usuários'], ['hospitais', 'Hospitais'], ['migracao', 'Migração do Flow antigo']];
-  root.innerHTML = `<div class="tabs">${tabs.map(([k, l]) => `<button data-atab="${k}" class="${adminTab === k ? 'active' : ''}">${l}</button>`).join('')}</div><div id="adm-body"></div>`;
+  root.innerHTML = `<div class="pg-head"><h2>👥 Administração</h2><span class="sub">Quem acessa o Flow, com qual papel, e a lista oficial de hospitais.</span></div><div class="tabs">${tabs.map(([k, l]) => `<button data-atab="${k}" class="${adminTab === k ? 'active' : ''}">${l}</button>`).join('')}</div><div id="adm-body"></div>`;
   $$('[data-atab]', root).forEach((b) => b.onclick = () => { adminTab = b.dataset.atab; renderAdmin(); });
   ({ usuarios: drawUsers, hospitais: drawHospitals, migracao: drawMigration })[adminTab]();
 }
@@ -90,7 +90,7 @@ function drawUsers() {
 
 function showTempPassword(email, pass) {
   const m = openModal(`
-    <div class="modal-head"><h2>Senha provisória</h2><button class="x" data-close>×</button></div>
+    <div class="modal-head"><h2>Senha provisória</h2><button class="x" data-close>✕</button></div>
     <div class="modal-body">
       <p style="margin-top:0">Envie para <b>${esc(email)}</b> por um canal privado. Ela só aparece agora; no primeiro acesso a pessoa define a própria senha.</p>
       <div style="display:flex;gap:6px"><input class="inp mono" id="tp" value="${esc(pass)}" readonly><button class="btn btn-primary btn-sm" id="tp-copy">Copiar</button></div>
@@ -105,7 +105,7 @@ function showTempPassword(email, pass) {
 
 function userForm(u) {
   const m = openModal(`
-    <div class="modal-head"><h2>${u ? 'Editar usuário' : 'Novo usuário'}</h2><button class="x" data-close>×</button></div>
+    <div class="modal-head"><h2>${u ? 'Editar usuário' : 'Novo usuário'}</h2><button class="x" data-close>✕</button></div>
     <div class="modal-body">
       <div class="field"><label>Nome</label><input class="inp" id="uf-name" value="${esc(u?.display_name || '')}"></div>
       <div class="field"><label>E-mail</label><input class="inp" id="uf-email" type="email" value="${esc(u?.email || '')}" ${u ? 'disabled' : ''}></div>
@@ -183,7 +183,7 @@ function drawHospitals() {
   });
   $$('[data-hren]').forEach((b) => b.onclick = () => {
     const old = b.dataset.hren;
-    const m = openModal(`<div class="modal-head"><h2>Renomear hospital</h2><button class="x" data-close>×</button></div>
+    const m = openModal(`<div class="modal-head"><h2>Renomear hospital</h2><button class="x" data-close>✕</button></div>
       <div class="modal-body"><div class="field"><label>Novo nome</label><input class="inp" id="hr" value="${esc(old)}"></div></div>
       <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="hr-ok">Salvar</button></div>`, { size: 'sm' });
     $('#hr-ok', m.el).onclick = async () => {
