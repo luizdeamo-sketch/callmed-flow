@@ -3,6 +3,7 @@
 
 const F = {
   search: '', hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false,
+  next: '', resp: '',
 };
 const FX = { mode: 'jornada', gran: 'dia', offset: 0, limit: 300, showDone: false, sort: 'sla', filtersOpen: false, cell: null };
 try { FX.gran = localStorage.getItem('flow:gran') || 'dia'; } catch (_) { /* ignora */ }
@@ -24,11 +25,22 @@ function filteredDoctors() {
     if (F.procuracao && String(d.procuracao) !== F.procuracao) return false;
     if (F.priority && d.priority !== F.priority) return false;
     if (F.slaVencido && (FINAL_STAGES.includes(d.stage) || doctorSla(d).status !== 'urgent')) return false;
+    if (F.next) {
+      if (FINAL_STAGES.includes(d.stage)) return false;
+      const n = daysTo(d.proxima_data);
+      if (F.next === 'sem' && d.proxima_acao) return false;
+      if (F.next !== 'sem' && (!d.proxima_acao || n === null)) return false;
+      if (F.next === 'atrasada' && n >= 0) return false;
+      if (F.next === 'hoje' && n !== 0) return false;
+      if (F.next === 'ate_hoje' && n > 0) return false;
+      if (F.next === 'semana' && (n < 0 || n > 7)) return false;
+    }
+    if (F.resp && (F.resp === 'me' ? d.proximo_responsavel_id !== S.user.id : d.proximo_responsavel_id !== F.resp)) return false;
     return true;
   });
 }
 function activeFilterCount() {
-  return [F.hospitals.length, F.setor, F.estado, F.stage, F.disc, F.statusEsp, F.app, F.procuracao, F.priority, F.slaVencido].filter(Boolean).length;
+  return [F.hospitals.length, F.setor, F.estado, F.stage, F.disc, F.statusEsp, F.app, F.procuracao, F.priority, F.slaVencido, F.next, F.resp].filter(Boolean).length;
 }
 
 // ================= estrutura da tela =================
@@ -50,6 +62,7 @@ function renderFluxo() {
           </div>
           <div class="seg-toggle" id="fx-gran" title="Resumo por dia ou por mês"><button data-gran="dia">Dia</button><button data-gran="mes">Mês</button></div>
           <span style="flex:1"></span>
+          <button class="icon-a" id="fx-hoje" title="Hoje — o que preciso fazer" style="position:relative">☀️<span class="badge-dot" id="fx-hoje-n" hidden></span></button>
           <button class="icon-a" id="fx-msg" title="Disparar cobranças / avisos">✉️</button>
           <button class="icon-a" id="fx-export" title="Exportar os médicos filtrados (CSV)">⬇</button>
           <button class="icon-a primary" id="fx-new" title="Novo médico">＋</button>
@@ -77,6 +90,7 @@ function renderFluxo() {
       refreshFluxo();
     });
     $('#fx-msg').onclick = () => openMessages();
+    $('#fx-hoje').onclick = () => openHoje();
     $('#fx-new').onclick = () => openNewDoctor();
     $('#fx-export').onclick = exportFiltered;
     buildFilters();
@@ -112,6 +126,8 @@ function renderKpis() {
   const venc = open.filter((d) => doctorSla(d).status === 'urgent').length;
   const pct = open.length ? Math.round(((open.length - venc) / open.length) * 100) : 100;
   const n = filteredDoctors().length;
+  const mine = nextCounts(true), team = nextCounts(false);
+  const hb = $('#fx-hoje-n'); if (hb) { hb.hidden = !(mine.late + mine.hoje); hb.textContent = mine.late + mine.hoje; }
   $('#fx-kpis').innerHTML = `
     <span class="op-kpi"><b>${all.length}</b> cadastros</span>
     <span class="op-kpi"><b>${open.length}</b> em andamento</span>
@@ -120,6 +136,8 @@ function renderKpis() {
     <span class="op-kpi clk bad ${F.slaVencido ? 'on' : ''}" data-k="sla"><b>${venc}</b> SLA vencido</span>
     <span class="op-kpi clk bad ${F.priority === 'urgente' ? 'on' : ''}" data-k="urg"><b>${all.filter((d) => d.priority === 'urgente' && !FINAL_STAGES.includes(d.stage)).length}</b> urgentes</span>
     <span class="op-kpi"><b>${pct}%</b> SLA cumprido</span>
+    <span class="op-kpi clk bad ${F.next === 'ate_hoje' && F.resp === 'me' ? 'on' : ''}" data-k="minhas" title="Minhas ações de hoje e atrasadas"><b>${mine.late + mine.hoje}</b> minhas ações p/ hoje</span>
+    <span class="op-kpi clk ${F.next === 'sem' ? 'on' : ''}" data-k="semacao" style="background:var(--amber-soft)" title="Médicos em andamento sem próxima ação definida"><b style="color:var(--amber-ink)">⚠ ${team.sem}</b> sem próxima ação</span>
     ${n !== all.length ? `<span class="op-kpi" style="background:var(--amber-soft)"><b style="color:var(--amber-ink)">${n}</b> no filtro</span>` : ''}`;
   $$('#fx-kpis [data-k]').forEach((k) => k.onclick = () => {
     const v = k.dataset.k;
@@ -127,6 +145,8 @@ function renderKpis() {
     if (v === 'docpend') F.stage = F.stage === 'documentacao_pendente' ? '' : 'documentacao_pendente';
     if (v === 'sla') F.slaVencido = !F.slaVencido;
     if (v === 'urg') F.priority = F.priority === 'urgente' ? '' : 'urgente';
+    if (v === 'minhas') { const on = F.next === 'ate_hoje' && F.resp === 'me'; F.next = on ? '' : 'ate_hoje'; F.resp = on ? '' : 'me'; }
+    if (v === 'semacao') { F.next = F.next === 'sem' ? '' : 'sem'; F.resp = ''; }
     buildFilters(); refreshFluxo();
   });
 }
@@ -149,16 +169,19 @@ function buildFilters() {
     <select id="f-app"><option value="">APP: todos</option>${opt('true', 'Com APP', F.app)}${opt('false', 'Sem APP', F.app)}</select>
     <select id="f-proc"><option value="">Procuração: todas</option>${opt('true', 'Com procuração', F.procuracao)}${opt('false', 'Sem procuração', F.procuracao)}</select>
     <select id="f-estado"><option value="">UF: todas</option>${estados.map((s) => opt(s, s, F.estado)).join('')}</select>
+    <select id="f-next"><option value="">Próxima ação: todas</option>${opt('ate_hoje', 'Hoje e atrasadas', F.next)}${opt('atrasada', 'Atrasadas', F.next)}${opt('hoje', 'Para hoje', F.next)}${opt('semana', 'Nos próximos 7 dias', F.next)}${opt('sem', 'Sem próxima ação', F.next)}</select>
+    <select id="f-resp"><option value="">Responsável: qualquer</option>${opt('me', 'Eu', F.resp)}${Object.values(S.profiles).filter((p) => p.ativo && p.user_id !== S.user.id).map((p) => opt(p.user_id, p.display_name, F.resp)).join('')}</select>
     <select id="f-sla"><option value="">SLA: qualquer</option>${opt('1', 'Só SLA vencido', F.slaVencido ? '1' : '')}</select>
     <label class="small" style="display:flex;gap:5px;align-items:center"><input type="checkbox" id="f-done" ${FX.showDone ? 'checked' : ''}> Mostrar encerrados (aprovados/reprovados)</label>
     <button id="f-clear">Limpar filtros</button>`;
   const bind = (id, key) => { $(id).onchange = (e) => { F[key] = e.target.value; refreshFluxo(); }; };
   bind('#f-setor', 'setor'); bind('#f-estado', 'estado'); bind('#f-stage', 'stage'); bind('#f-disc', 'disc');
   bind('#f-status', 'statusEsp'); bind('#f-app', 'app'); bind('#f-proc', 'procuracao'); bind('#f-prio', 'priority');
+  bind('#f-next', 'next'); bind('#f-resp', 'resp');
   $('#f-sla').onchange = (e) => { F.slaVencido = !!e.target.value; refreshFluxo(); };
   $('#f-done').onchange = (e) => { FX.showDone = e.target.checked; refreshFluxo(); };
   $('#f-clear').onclick = () => {
-    Object.assign(F, { hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false });
+    Object.assign(F, { hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '' });
     buildFilters(); refreshFluxo();
   };
   $('#f-hosp-btn').onclick = (e) => { e.stopPropagation(); const p = $('#f-hosp-pop'); p.hidden = !p.hidden; if (!p.hidden) renderHospPop(); };
@@ -184,11 +207,11 @@ function syncFilterWidgets() {
 function exportFiltered() {
   const list = filteredDoctors();
   downloadCsv(`medicos_flow_${new Date().toISOString().slice(0, 10)}.csv`,
-    ['Médico', 'Hospital', 'Setores', 'CRM', 'CPF', 'WhatsApp', 'Etapa', 'Prioridade', 'Entrada', 'SLA', 'Formação', 'DISC', 'APP', 'Procuração', 'Doc. pendente', 'Docs %'],
+    ['Médico', 'Hospital', 'Setores', 'CRM', 'CPF', 'WhatsApp', 'Etapa', 'Prioridade', 'Entrada', 'SLA', 'Próxima ação', 'Data da ação', 'Responsável', 'Formação', 'DISC', 'APP', 'Procuração', 'Doc. pendente', 'Docs %'],
     list.map((d) => {
       const s = FINAL_STAGES.includes(d.stage) ? null : doctorSla(d);
       return [d.name, d.hospital, (d.setores || []).join(', '), d.crm, d.cpf, d.whatsapp, stageLabel(d.stage), d.priority, fmtDate(d.entry_date),
-        s ? (s.status === 'urgent' ? 'Vencido' : fmtRemaining(s.remaining)) : '—', d.status_especialidade, d.disc, d.app ? 'Sim' : 'Não', d.procuracao ? 'Sim' : 'Não', d.doc_pendente, S.docProgress[d.id] || 0];
+        s ? (s.status === 'urgent' ? 'Vencido' : fmtRemaining(s.remaining)) : '—', d.proxima_acao || '', d.proxima_data ? fmtYmd(d.proxima_data) : '', d.proxima_acao ? respName(d.proximo_responsavel_id) : '', d.status_especialidade, d.disc, d.app ? 'Sim' : 'Não', d.procuracao ? 'Sim' : 'Não', d.doc_pendente, S.docProgress[d.id] || 0];
     }));
   toast(`${list.length} médico(s) exportado(s)`, 'ok');
 }
@@ -273,6 +296,8 @@ function renderCellChip() {
   if (F.procuracao) chip(`<b>${F.procuracao === 'true' ? 'Com' : 'Sem'} procuração</b>`, 'procuracao');
   if (F.estado) chip(`UF: <b>${esc(F.estado)}</b>`, 'estado');
   if (F.search) chip(`Busca: <b>${esc(F.search)}</b>`, 'search');
+  if (F.next) chip(`Próxima ação: <b>${esc({ ate_hoje: 'hoje e atrasadas', atrasada: 'atrasadas', hoje: 'para hoje', semana: 'próximos 7 dias', sem: 'sem próxima ação' }[F.next])}</b>`, 'next');
+  if (F.resp) chip(`Responsável: <b>${esc(F.resp === 'me' ? 'eu' : respName(F.resp))}</b>`, 'resp');
   box.hidden = !chips.length;
   if (!chips.length) { box.innerHTML = ''; return; }
   const n = filteredDoctors().length;
@@ -289,7 +314,7 @@ function renderCellChip() {
   const all = $('#fx-unall', box);
   if (all) all.onclick = () => {
     FX.cell = null; $('#f-search').value = '';
-    Object.assign(F, { search: '', hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false });
+    Object.assign(F, { search: '', hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '' });
     buildFilters(); refreshFluxo();
   };
 }
@@ -297,7 +322,7 @@ function renderCellChip() {
 /** Abre o Fluxo já filtrado (usado pelos números clicáveis dos Indicadores). */
 function goFluxoFiltered(patch) {
   FX.cell = null;
-  Object.assign(F, { hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false }, patch);
+  Object.assign(F, { hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '' }, patch);
   if ($('#fx-more')) buildFilters();
   go('fluxo');
 }
@@ -363,7 +388,7 @@ function renderJornada(list) {
     const todayPos = curIdx >= 0 ? curIdx + (now - cols[curIdx].start) / (cols[curIdx].end - cols[curIdx].start) : -1;
     return `<div class="op-row" data-doc="${d.id}">
       <div class="op-left"><div class="n"><span class="sdot s-${sla ? sla.status : 'none'}"></span>${esc(d.name)}${d.priority === 'urgente' ? '<span class="tagx bad">URG</span>' : d.priority === 'hospital_novo' ? '<span class="tagx warn">3h</span>' : ''}</div>
-        <div class="m">${esc(d.hospital)}${(d.setores || []).length ? ' · ' + esc(d.setores.join(', ')) : ''} · ${daysIn(d)}d${sla ? ` · <span style="color:${sla.status === 'urgent' ? 'var(--red)' : sla.status === 'warning' ? 'var(--amber)' : 'inherit'}">${sla.status === 'urgent' ? 'SLA vencido' : 'SLA ' + fmtRemaining(sla.remaining)}</span>` : ` · ${esc(stageLabel(d.stage))}`}</div></div>
+        <div class="m">${esc(d.hospital)}${(d.setores || []).length ? ' · ' + esc(d.setores.join(', ')) : ''} · ${daysIn(d)}d${sla ? ` · <span style="color:${sla.status === 'urgent' ? 'var(--red)' : sla.status === 'warning' ? 'var(--amber)' : 'inherit'}">${sla.status === 'urgent' ? 'SLA vencido' : 'SLA ' + fmtRemaining(sla.remaining)}</span>` : ` · ${esc(stageLabel(d.stage))}`}${nextInline(d)}</div></div>
       <div class="op-right">${todayPos >= 0 ? `<div class="op-today" style="left:calc(${todayPos} * var(--dw))"></div>` : ''}
         ${segs.map((s) => { const st = stageById(s.st); const w = s.end - s.start + 1; return `<div class="seg" style="left:calc(${s.start} * var(--dw) + 2px);width:calc(${w} * var(--dw) - 4px);background:${esc(st?.color || '#999')}" title="${esc(st?.label || s.st)}">${w >= 2 || FX.gran === 'mes' ? esc(st?.label || '') : ''}</div>`; }).join('')}</div></div>`;
   };
@@ -398,6 +423,7 @@ function cardHtml(d) {
     <div class="kgrid"><span title="${esc((d.setores || []).join(', '))}">${esc((d.setores || []).join(', ') || '—')}</span><span title="${esc(d.hospital)}">${esc(d.hospital)}</span><span>${esc(d.crm || '—')}</span><span>${esc(d.whatsapp || '—')}</span></div>
     <div class="tags">${d.status_especialidade ? `<span class="tag">${esc(d.status_especialidade)}</span>` : ''}${d.disc ? `<span class="tag ${DISC_CLASS[d.disc]}">${esc(DISC_LABEL[d.disc])}</span>` : ''}${t(d.link_enviado, 'Link')}${t(d.app, 'APP')}${t(d.procuracao, 'Proc.')}</div>
     ${d.doc_pendente ? `<div class="pend" title="${esc(d.doc_pendente)}">📄 ${esc(d.doc_pendente)}</div>` : ''}
+    ${isOpen(d) ? `<div class="small" style="margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nextInline(d).replace(/^ · /, '')}</div>` : ''}
     <div class="foot"><span class="prog"><i style="width:${prog}%;background:${prog >= 100 ? 'var(--green)' : prog >= 50 ? '#e0a94f' : 'var(--ink-faint)'}"></i></span>${prog}%
       <span>${fmtDate(d.entry_date)}</span>${sla ? `<span class="slapill ${sla.status}">${fmtRemaining(sla.remaining)}</span>` : ''}</div>
   </div>`;
@@ -462,6 +488,9 @@ function renderBoard(list) {
 async function moveDoctor(d, toStage) {
   const st = stageById(toStage);
   const patch = { stage: toStage, stage_entered_at: new Date().toISOString(), sla_hours: st?.sla_hours ?? 24 };
+  // próxima ação sugerida para a nova etapa (encerrado = sem próxima ação)
+  if (FINAL_STAGES.includes(toStage)) Object.assign(patch, { proxima_acao: null, proxima_data: null, proximo_responsavel_id: null });
+  else if (ACAO_POR_ETAPA[toStage]) Object.assign(patch, { proxima_acao: ACAO_POR_ETAPA[toStage], proxima_data: addBusinessDays(1), proximo_responsavel_id: d.proximo_responsavel_id || S.user.id });
   const { error } = await sb.from('flow_doctors').update(patch).eq('id', d.id);
   if (error) { toast('Erro ao mover médico: ' + error.message, 'err'); return false; }
   Object.assign(d, patch);

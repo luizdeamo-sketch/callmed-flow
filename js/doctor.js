@@ -98,6 +98,7 @@ function openNewDoctor() {
       priority: $('#nd-prio', el).value, medsimples: $('#nd-med', el).checked ? 'Sim' : '', procuracao: $('#nd-proc', el).checked,
       app: $('#nd-app', el).checked, observations: $('#nd-obs', el).value.trim(), stage: 'aguardando_contato',
       sla_hours: stageById('aguardando_contato')?.sla_hours ?? 24,
+      proxima_acao: ACAO_POR_ETAPA.aguardando_contato, proxima_data: ymdToday(), proximo_responsavel_id: S.user.id,
     };
     let created = 0, failed = 0;
     for (const h of hospSel) {
@@ -182,6 +183,7 @@ function drawMedico() {
           ${d.stage !== 'reprovado' ? '<button class="btn btn-danger btn-sm" data-move="reprovado">✗ Reprovar</button>' : ''}
         </div>
       </div>
+      ${nextStripHtml(d)}
       <div id="pv-wa-box"></div>
     </div></div>
     <div class="pv-tabs">${TABS.map(([k, l]) => `<button class="pv-tab ${PV.tab === k ? 'on' : ''}" data-tab="${k}">${l}</button>`).join('')}</div>
@@ -193,6 +195,7 @@ function drawMedico() {
     const np = d.priority === 'urgente' ? 'rotina' : 'urgente';
     if (await updateDoctor(d, { priority: np }, `Prioridade alterada para ${PRIORITIES[np]}`)) { await loadDoctorDetail(); drawMedico(); }
   };
+  bindNextStrip(d, async () => { await loadDoctorDetail(); drawMedico(); });
   $('#pa-edit').onclick = () => editDoctorDialog(d);
   $('#pa-msg').onclick = () => openMessages(d);
   $('#pa-copy').onclick = () => replicate(d);
@@ -254,7 +257,7 @@ function otherHospitals(d) {
 }
 
 function drawHistTab(body, d) {
-  const ICON = { stage_change: '➡️', note: '📝', doc: '📄', contact: '💬', cobranca: '✉️', admin: '⚙️' };
+  const ICON = { stage_change: '➡️', note: '📝', doc: '📄', contact: '💬', cobranca: '✉️', admin: '⚙️', acao: '⏰' };
   body.innerHTML = `
     <div class="es-box"><div class="ql">Registrar atividade</div>
       <div style="display:flex;gap:6px"><input class="inp" id="pv-note" placeholder="Nota, ligação, retorno do hospital..."><button class="btn btn-primary btn-sm" id="pv-note-ok">Registrar</button></div></div>
@@ -373,6 +376,7 @@ function replicate(d) {
       name: d.name, cpf: d.cpf, crm: d.crm, estado: d.estado, status_especialidade: d.status_especialidade, setores: d.setores, rqe: d.rqe,
       disc: d.disc, medsimples: d.medsimples, whatsapp: d.whatsapp, hospital: h, stage: 'aguardando_contato', priority: 'rotina',
       sla_hours: stageById('aguardando_contato')?.sla_hours ?? 24,
+      proxima_acao: ACAO_POR_ETAPA.aguardando_contato, proxima_data: ymdToday(), proximo_responsavel_id: S.user.id,
       observations: d.observations ? `[Replicado de ${d.hospital}] ${d.observations}` : `Replicado de ${d.hospital}`,
     };
     const { data, error } = await sb.from('flow_doctors').insert(copy).select().single();

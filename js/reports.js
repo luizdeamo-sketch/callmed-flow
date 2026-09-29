@@ -238,7 +238,7 @@ function drawAudit(rows) {
   const byId = Object.fromEntries(S.doctors.map((d) => [d.id, d]));
   const ref = (a) => (a.doctor_id ? byId[a.doctor_id]?.name || '(médico excluído)' : a.rqe ? `RQE · ${a.rqe.doctor?.name || ''}` : '—');
   const who = (a) => a.created_by_name || (a.created_by ? S.profiles[a.created_by]?.display_name : '') || 'Sistema';
-  const TYPES = { stage_change: 'Movimentação', note: 'Nota / edição', doc: 'Documento', contact: 'Contato', cobranca: 'Cobrança', admin: 'Administração' };
+  const TYPES = { stage_change: 'Movimentação', note: 'Nota / edição', doc: 'Documento', contact: 'Contato', cobranca: 'Cobrança', acao: 'Próxima ação', admin: 'Administração' };
   const q = norm(AF.q);
   const list = rows.filter((a) => (!q || norm(a.description).includes(q) || norm(who(a)).includes(q) || norm(ref(a)).includes(q)) &&
     (!AF.user || who(a) === AF.user) && (!AF.type || a.type === AF.type) && (!AF.mod || (AF.mod === 'RQE' ? a.rqe_request_id : !a.rqe_request_id)));

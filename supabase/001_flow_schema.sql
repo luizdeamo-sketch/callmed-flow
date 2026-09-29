@@ -375,3 +375,40 @@ insert into storage.buckets (id, name, public, file_size_limit) values ('flow-do
 create policy flow_docs_sel on storage.objects for select to authenticated using (bucket_id = 'flow-docs' and public.flow_is_member());
 create policy flow_docs_ins on storage.objects for insert to authenticated with check (bucket_id = 'flow-docs' and public.flow_is_member());
 create policy flow_docs_del on storage.objects for delete to authenticated using (bucket_id = 'flow-docs' and public.flow_is_admin());
+
+-- ---------- migração 5: próxima ação por médico + tarefas avulsas do painel Hoje ----------
+alter table public.flow_doctors
+  add column proxima_acao text,
+  add column proxima_data date,
+  add column proximo_responsavel_id uuid references auth.users(id) on delete set null;
+create index flow_doctors_proxima_idx on public.flow_doctors(proxima_data) where proxima_acao is not null;
+create table public.flow_tarefas (
+  id uuid primary key default gen_random_uuid(),
+  descricao text not null,
+  data date not null default current_date,
+  concluida boolean not null default false,
+  responsavel_id uuid references auth.users(id) on delete set null,
+  created_by uuid references auth.users(id) on delete set null,
+  created_at timestamptz not null default now()
+);
+create index flow_tarefas_data_idx on public.flow_tarefas(data);
+create or replace function public.flow_tarefas_stamp()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is not null then
+    new.created_by := auth.uid();
+    if new.responsavel_id is null then new.responsavel_id := auth.uid(); end if;
+  end if;
+  return new;
+end $$;
+create trigger flow_tarefas_stamp before insert on public.flow_tarefas for each row execute function public.flow_tarefas_stamp();
+revoke execute on function public.flow_tarefas_stamp() from public, anon, authenticated;
+alter table public.flow_tarefas enable row level security;
+create policy flow_tar_sel on public.flow_tarefas for select to authenticated using (public.flow_is_member());
+create policy flow_tar_ins on public.flow_tarefas for insert to authenticated with check (public.flow_is_member());
+create policy flow_tar_upd on public.flow_tarefas for update to authenticated using (public.flow_is_member()) with check (public.flow_is_member());
+create policy flow_tar_del on public.flow_tarefas for delete to authenticated using (public.flow_is_member() and (created_by = auth.uid() or public.flow_is_admin()));
+
+-- ---------- migração 6: tipo 'acao' no histórico (próxima ação definida/concluída; não gera notificação) ----------
+alter table public.flow_activities drop constraint flow_activities_type_check;
+alter table public.flow_activities add constraint flow_activities_type_check check (type in ('stage_change','note','contact','cobranca','doc','admin','acao'));
