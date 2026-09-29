@@ -1,0 +1,6 @@
+# dados pessoais da migração — nunca publicar
+migracao/
+*.json.bak
+docs/
+supabase/migracao_lovable.py
+.claude/
