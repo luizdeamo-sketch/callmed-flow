@@ -253,8 +253,11 @@
   /* barra do topo do Fluxo */
   .op-top{ padding:14px 24px 12px; display:flex; flex-direction:column; gap:10px; background:var(--surface); border-bottom:1px solid var(--border); position:sticky; top:0; z-index:8;}
   .op-filters{ display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
-  .op-filters input, .op-filters select, .op-filters > button, .op-filters-more select, .op-filters-more > button{ border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 10px; font-size:13px; background:var(--surface); color:var(--ink);}
-  .op-filters input{ width:260px;}
+  .op-filters input:not([type=checkbox]):not([type=radio]):not([type=file]), .op-filters select, .op-filters > button, .op-filters-more select, .op-filters-more > button{ border:1px solid var(--border); border-radius:var(--radius-sm); padding:7px 10px; font-size:13px; background:var(--surface); color:var(--ink);}
+  .op-filters input:not([type=checkbox]):not([type=radio]):not([type=file]){ width:260px;}
+  .op-filters input[type=checkbox]{ width:15px; height:15px; margin:0; flex:none; accent-color:var(--brand);}
+  #f-hosp-pop #hp-q{ width:100%;}
+  #hp-list label{ align-items:center; border-radius:6px;} #hp-list label:hover{ background:var(--brand-soft);}
   .op-filters > button:hover, .op-filters-more > button:hover{ background:var(--brand-soft);}
   .op-fcount{ display:inline-flex; align-items:center; justify-content:center; min-width:16px; height:16px; padding:0 4px; margin-left:5px; border-radius:999px; background:var(--brand); color:#fff; font-size:10px; font-family:'Poppins',sans-serif;}
   .op-filters-more{ display:none; gap:8px; flex-wrap:wrap; align-items:center;}
@@ -403,7 +406,7 @@
   .dz:hover, .dz.over{ border-color:var(--brand); color:var(--brand);}
   @media (max-width: 900px){ .pv-grid{ grid-template-columns:1fr;} }
   @media (max-width: 760px){
-    .op-top{ padding:12px;} .op-filters input{ width:100%;}
+    .op-top{ padding:12px;} .op-filters input:not([type=checkbox]):not([type=radio]):not([type=file]){ width:100%;}
     .op-scroll{ --oplw:100%;} .op-right, .op-head, .op-sumbox{ display:none;} .op-left{ position:static; width:100%; flex:1 1 100%; border-right:none;}
     #view-medico.active, .view.pgview{ padding:12px;}
   }
@@ -504,14 +507,14 @@
 <div id="modal-root"></div>
 <div id="toasts"></div>
 
-<script src="config.js?v=20260929172503"></script>
-<script src="js/core.js?v=20260929172503"></script>
-<script src="js/hoje.js?v=20260929172503"></script>
-<script src="js/fluxo.js?v=20260929172503"></script>
-<script src="js/doctor.js?v=20260929172503"></script>
-<script src="js/rqe.js?v=20260929172503"></script>
-<script src="js/reports.js?v=20260929172503"></script>
-<script src="js/sugestoes.js?v=20260929172503"></script>
-<script src="js/admin.js?v=20260929172503"></script>
+<script src="config.js?v=20260930092750"></script>
+<script src="js/core.js?v=20260930092750"></script>
+<script src="js/hoje.js?v=20260930092750"></script>
+<script src="js/fluxo.js?v=20260930092750"></script>
+<script src="js/doctor.js?v=20260930092750"></script>
+<script src="js/rqe.js?v=20260930092750"></script>
+<script src="js/reports.js?v=20260930092750"></script>
+<script src="js/sugestoes.js?v=20260930092750"></script>
+<script src="js/admin.js?v=20260930092750"></script>
 </body>
 </html>
