@@ -448,6 +448,8 @@ function renderJornada(list) {
       if (c.start > now) return '';
       return `<div class="op-sumcell ${n ? 'clk' : 'z'} ${isSel(s.id, c) ? 'sel' : ''}" style="left:calc(${i} * var(--dw))" ${n ? `data-cell="${s.id}|${i}" title="${n} médico(s) em ${esc(s.label)} em ${c.tag}"` : ''}>${n || '·'}</div>`;
     }).join('')}</div></div>`).join('')}
+    <div class="op-sumrow op-totalrow"><div class="op-left" title="Soma de todas as etapas acima (cada coluna = soma do dia/mês)">Σ Total<b style="margin-left:auto;font-family:Poppins">${shownStages.reduce((a, s) => a + (FINAL_STAGES.includes(s.id) ? list.filter((d) => d.stage === s.id && closedInWindow(d)).length : list.filter((d) => d.stage === s.id).length), 0)}</b></div>
+      <div class="op-right">${cols.map((c, i) => (c.start > now ? '' : `<div class="op-sumcell" style="left:calc(${i} * var(--dw))">${shownStages.reduce((a, s) => a + counts[s.id][i], 0)}</div>`)).join('')}</div></div>
     <div class="op-sumrow"><div class="op-left" id="fx-closed" title="Aprovado ou reprovado encerra o credenciamento — por isso ficam fora da tela" style="color:var(--ink-faint)">✔ Encerrados antes: ${nApr} aprov. · ${nRep} reprov.<span class="btn-ghost" style="margin-left:auto;padding:0">${FX.showDone ? 'ocultar' : 'mostrar'}</span></div><div class="op-right"></div></div></div>`;
 
   const countRow = `<div class="op-row op-countrow"><div class="op-left">${rows.length} de ${list.length} médicos
