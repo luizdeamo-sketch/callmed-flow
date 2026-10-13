@@ -6,7 +6,38 @@ const F = {
   next: '', resp: '', mine: false,
 };
 const FX = { sumOpen: true, mode: 'jornada', gran: 'dia', offset: 0, limit: 300, showDone: false, sort: 'sla', filtersOpen: false, cell: null };
-try { FX.gran = localStorage.getItem('flow:gran') || 'dia'; FX.sumOpen = localStorage.getItem('flow:sum') !== 'false'; } catch (_) { /* ignora */ }
+try { FX.sumOpen = localStorage.getItem('flow:sum') !== 'false'; } catch (_) { /* ignora */ }
+
+// ---------- período da Jornada (atalhos, início/fim e "visualizar por") ----------
+const PER_PRESETS = [
+  ['7d', 'Últimos 7 dias', 'dia'], ['mes', 'Este mês', 'dia'], ['30d', 'Últimos 30 dias', 'dia'],
+  ['mespassado', 'Mês passado', 'dia'], ['3m', 'Últimos 3 meses', 'semana'], ['12m', 'Últimos 12 meses', 'mes'], ['ano', 'Este ano', 'mes'],
+];
+const GRAN_LABEL = { dia: 'por dia', semana: 'por semana', mes: 'por mês' };
+function presetRange(key) {
+  const t = new Date(); t.setHours(0, 0, 0, 0);
+  const d = (y, m, dd) => new Date(y, m, dd);
+  const back = (n) => { const x = new Date(t); x.setDate(x.getDate() - n); return x; };
+  switch (key) {
+    case '7d': return [back(6), t];
+    case 'mes': return [d(t.getFullYear(), t.getMonth(), 1), t];
+    case 'mespassado': return [d(t.getFullYear(), t.getMonth() - 1, 1), d(t.getFullYear(), t.getMonth(), 0)];
+    case '3m': return [d(t.getFullYear(), t.getMonth() - 3, t.getDate() + 1), t];
+    case '12m': return [d(t.getFullYear() - 1, t.getMonth() + 1, 1), t];
+    case 'ano': return [d(t.getFullYear(), 0, 1), t];
+    default: return [back(29), t];
+  }
+}
+function ymdToDate(v) { const [y, m, dd] = String(v).split('-').map(Number); return new Date(y, m - 1, dd); }
+FX.per = { preset: '30d', start: null, end: null, gran: 'dia' };
+try { const saved = JSON.parse(localStorage.getItem('flow:periodo') || 'null'); if (saved && saved.gran) FX.per = saved; } catch (_) { /* ignora */ }
+/** Datas efetivas: atalhos são recalculados a cada dia ("últimos 30 dias" acompanha o calendário). */
+function perRange() {
+  if (FX.per.preset !== 'custom' || !FX.per.start || !FX.per.end) return presetRange(FX.per.preset);
+  return [ymdToDate(FX.per.start), ymdToDate(FX.per.end)];
+}
+function savePer() { try { localStorage.setItem('flow:periodo', JSON.stringify(FX.per)); } catch (_) { /* ignora */ } }
+Object.defineProperty(FX, 'gran', { get() { return FX.per.gran; }, configurable: true });
 try { FX.mode = localStorage.getItem('flow:mode') || 'jornada'; } catch (_) { /* ignora */ }
 const colLimit = {}; // etapa -> quantos cards mostrar no Kanban
 let STAGE_EV = null;  // histórico de etapas por médico (para a Jornada)
@@ -57,12 +88,10 @@ function renderFluxo() {
           <div style="position:relative" id="f-hosp-wrap"><div id="fx-hosp-top" style="display:contents"></div></div>
           <button id="f-toggle">⚙ Filtros<span id="f-count" class="op-fcount" hidden></span></button>
           <div class="seg-toggle" id="fx-mode"><button data-mode="jornada">🧭 Jornada</button><button data-mode="kanban">▦ Kanban</button></div>
-          <div class="op-nav-pill" id="fx-nav">
-            <button data-nav="-big" title="Voltar mais">«</button><button data-nav="-small" title="Voltar">‹</button>
-            <span class="rng" id="fx-range"></span>
-            <button data-nav="small" title="Avançar">›</button><button data-nav="big" title="Avançar mais">»</button><button data-nav="0" title="Voltar para hoje">Hoje</button>
+          <div style="position:relative" id="fx-per-wrap">
+            <button id="fx-per-btn" class="per-btn" title="Escolher o período da Jornada">📅 <span id="fx-range"></span></button>
+            <div class="per-pop" id="fx-per-pop" hidden></div>
           </div>
-          <div class="seg-toggle" id="fx-gran" title="Resumo por dia ou por mês"><button data-gran="dia">Dia</button><button data-gran="mes">Mês</button></div>
           <span style="flex:1"></span>
           <button class="icon-a" id="fx-hot" title="🔥 Prioridades da semana — quem cobrar primeiro">🔥</button>
           <button class="icon-a" id="fx-hoje" title="Hoje — o que preciso fazer" style="position:relative">☀️<span class="badge-dot" id="fx-hoje-n" hidden></span></button>
@@ -82,16 +111,8 @@ function renderFluxo() {
       try { localStorage.setItem('flow:mode', FX.mode); } catch (_) { /* ignora */ }
       refreshFluxo();
     });
-    $$('#fx-nav [data-nav]').forEach((b) => b.onclick = () => {
-      const k = b.dataset.nav, step = FX.gran === 'mes' ? { small: 1, big: 6 } : { small: 7, big: 21 };
-      FX.offset = k === '0' ? 0 : FX.offset + (k.startsWith('-') ? -1 : 1) * step[k.replace('-', '')];
-      refreshFluxo();
-    });
-    $$('#fx-gran button').forEach((b) => b.onclick = () => {
-      FX.gran = b.dataset.gran; FX.offset = 0; FX.cell = null;
-      try { localStorage.setItem('flow:gran', FX.gran); } catch (_) { /* ignora */ }
-      refreshFluxo();
-    });
+    $('#fx-per-btn').onclick = (e) => { e.stopPropagation(); const p = $('#fx-per-pop'); p.hidden = !p.hidden; if (!p.hidden) renderPerPop(); };
+    document.addEventListener('click', (e) => { const p = $('#fx-per-pop'); if (p && !p.hidden && !e.target.closest('#fx-per-wrap')) p.hidden = true; });
     $('#fx-msg').onclick = () => openMessages();
     $('#fx-hoje').onclick = () => openHoje();
     $('#fx-new').onclick = () => openNewDoctor();
@@ -109,8 +130,8 @@ async function refreshFluxo() {
   renderKpis();
   syncFilterWidgets();
   $$('#fx-mode button').forEach((b) => b.classList.toggle('active', b.dataset.mode === FX.mode));
-  $('#fx-nav').hidden = $('#fx-gran').hidden = FX.mode !== 'jornada';
-  $$('#fx-gran button').forEach((b) => b.classList.toggle('active', b.dataset.gran === FX.gran));
+  $('#fx-per-wrap').hidden = FX.mode !== 'jornada';
+  { const [a, b] = perRange(); $('#fx-range').textContent = `${fmtDate(a)} – ${fmtDate(b)} · ${GRAN_LABEL[FX.gran]}`; }
   renderCellChip();
   const body = $('#fx-body');
   body.classList.toggle('kb', FX.mode === 'kanban');
@@ -299,24 +320,66 @@ function openPrioridades() {
 const WD = ['dom', 'seg', 'ter', 'qua', 'qui', 'sex', 'sáb'];
 const MES = ['JAN', 'FEV', 'MAR', 'ABR', 'MAI', 'JUN', 'JUL', 'AGO', 'SET', 'OUT', 'NOV', 'DEZ'];
 
-/** Colunas da janela: por dia (21 dias) ou por mês (12 meses). Cada coluna é um período [start, end). */
+/** Colunas do período escolhido: por dia, semana (seg–dom) ou mês. Cada coluna é um período [start, end). */
 function jornadaCols() {
   const now = new Date();
   const today = new Date(now); today.setHours(0, 0, 0, 0);
+  const [ini, fim] = perRange();
+  const last = new Date(fim); last.setDate(last.getDate() + 1); // fim inclusivo
+  const cols = [];
   if (FX.gran === 'mes') {
-    const first = new Date(today.getFullYear(), today.getMonth() - 9 + FX.offset, 1);
-    return Array.from({ length: 12 }, (_, i) => {
-      const start = new Date(first.getFullYear(), first.getMonth() + i, 1);
-      const end = new Date(start.getFullYear(), start.getMonth() + 1, 1);
-      return { start, end, label: MES[start.getMonth()], sub: String(start.getFullYear()).slice(2), cur: now >= start && now < end, tag: `${MES[start.getMonth()]}/${String(start.getFullYear()).slice(2)}` };
-    });
+    for (let m = new Date(ini.getFullYear(), ini.getMonth(), 1); m < last; m = new Date(m.getFullYear(), m.getMonth() + 1, 1)) {
+      const end = new Date(m.getFullYear(), m.getMonth() + 1, 1);
+      cols.push({ start: m, end, label: MES[m.getMonth()], sub: String(m.getFullYear()).slice(2), cur: now >= m && now < end, tag: `${MES[m.getMonth()]}/${String(m.getFullYear()).slice(2)}`, expand: true });
+    }
+  } else if (FX.gran === 'semana') {
+    let w = new Date(ini); w.setDate(w.getDate() - ((w.getDay() + 6) % 7)); // segunda-feira
+    for (; w < last; w = new Date(w.getFullYear(), w.getMonth(), w.getDate() + 7)) {
+      const end = new Date(w); end.setDate(end.getDate() + 7);
+      const lbl = `${pad(w.getDate())}/${pad(w.getMonth() + 1)}`;
+      cols.push({ start: new Date(w), end, label: lbl, sub: 'sem', cur: now >= w && now < end, tag: `semana de ${lbl}`, expand: true });
+    }
+  } else {
+    for (let dd = new Date(ini); dd < last; dd = new Date(dd.getFullYear(), dd.getMonth(), dd.getDate() + 1)) {
+      const end = new Date(dd); end.setDate(end.getDate() + 1);
+      const lbl = `${pad(dd.getDate())}/${pad(dd.getMonth() + 1)}`;
+      cols.push({ start: new Date(dd), end, label: lbl, sub: WD[dd.getDay()], cur: +dd === +today, we: [0, 6].includes(dd.getDay()), tag: lbl });
+    }
   }
-  return Array.from({ length: 21 }, (_, i) => {
-    const start = new Date(today); start.setDate(start.getDate() - 17 + i + FX.offset);
-    const end = new Date(start); end.setDate(end.getDate() + 1);
-    const lbl = `${pad(start.getDate())}/${pad(start.getMonth() + 1)}`;
-    return { start, end, label: lbl, sub: WD[start.getDay()], cur: +start === +today, we: [0, 6].includes(start.getDay()), tag: lbl };
-  });
+  return cols;
+}
+
+/** Janelinha de período, igual ao exemplo: atalhos, início/fim, visualizar por, contador e Aplicar. */
+function renderPerPop() {
+  const pop = $('#fx-per-pop');
+  let draft = { ...FX.per };
+  const [a0, b0] = perRange();
+  const draw = (ini, fim) => {
+    const dias = Math.round((ymdToDate(fim) - ymdToDate(ini)) / 864e5) + 1;
+    pop.innerHTML = `
+      <div class="per-chips">${PER_PRESETS.map(([k, l]) => `<button class="per-chip ${draft.preset === k ? 'on' : ''}" data-pre="${k}">${l}</button>`).join('')}</div>
+      <div class="per-dates"><label class="lbl">Início<input type="date" class="inp" id="per-ini" value="${ini}"></label><label class="lbl">Fim<input type="date" class="inp" id="per-fim" value="${fim}"></label></div>
+      <label class="lbl" style="display:block;margin-top:10px">Visualizar por
+        <select class="inp" id="per-gran"><option value="dia" ${draft.gran === 'dia' ? 'selected' : ''}>Dias</option><option value="semana" ${draft.gran === 'semana' ? 'selected' : ''}>Semanas</option><option value="mes" ${draft.gran === 'mes' ? 'selected' : ''}>Meses</option></select></label>
+      <div class="small muted" style="margin:8px 0" id="per-info">${dias > 0 ? `${dias} dia(s) no período.` : 'O fim precisa ser depois do início.'}${draft.gran === 'dia' && dias > 120 ? ' <b style="color:var(--amber-ink)">Muitos dias — prefira Semanas ou Meses.</b>' : ''}</div>
+      <button class="btn btn-line btn-block" id="per-ok" ${dias > 0 ? '' : 'disabled'}>Aplicar</button>`;
+    $$('[data-pre]', pop).forEach((b) => b.onclick = (e) => {
+      e.stopPropagation();
+      const pr = PER_PRESETS.find((x) => x[0] === b.dataset.pre);
+      const [a, z] = presetRange(pr[0]);
+      draft = { preset: pr[0], start: null, end: null, gran: pr[2] };
+      draw(ymd(a), ymd(z));
+    });
+    const custom = () => { draft.preset = 'custom'; draft.start = $('#per-ini', pop).value; draft.end = $('#per-fim', pop).value; draft.gran = $('#per-gran', pop).value; draw(draft.start, draft.end); };
+    $('#per-ini', pop).onchange = custom; $('#per-fim', pop).onchange = custom;
+    $('#per-gran', pop).onchange = (e) => { draft.gran = e.target.value; draw($('#per-ini', pop).value, $('#per-fim', pop).value); };
+    $('#per-ok', pop).onclick = () => {
+      if (draft.preset === 'custom') { draft.start = $('#per-ini', pop).value; draft.end = $('#per-fim', pop).value; }
+      FX.per = draft; FX.cell = null; FX.limit = 300; savePer();
+      pop.hidden = true; refreshFluxo();
+    };
+  };
+  draw(ymd(a0), ymd(b0));
 }
 
 /** Linha do tempo de etapas do médico: [{at, stage}] em ordem, começando na entrada. */
@@ -412,7 +475,6 @@ function renderJornada(list) {
   const body = $('#fx-body');
   const cols = jornadaCols();
   const now = new Date();
-  $('#fx-range').textContent = FX.gran === 'mes' ? `${cols[0].tag} – ${cols[cols.length - 1].tag}` : `${cols[0].tag} – ${cols[cols.length - 1].tag}`;
   const tls = new Map(list.map((d) => [d.id, timelineOf(d)]));
 
   // resumo: quantos médicos passaram por cada etapa em cada coluna
@@ -439,8 +501,8 @@ function renderJornada(list) {
   const curIdx = cols.findIndex((c) => c.cur);
   const isSel = (st, c) => FX.cell && FX.cell.stage === st && +FX.cell.s === +c.start && FX.cell.gran === FX.gran;
 
-  const head = `<div class="op-row op-head"><div class="op-left"><span id="fx-sumtoggle" style="cursor:pointer" title="Recolher / abrir o resumo">${FX.sumOpen ? '▾' : '▸'} Resumo ${FX.gran === 'mes' ? 'mensal' : 'diário'}</span><span class="info-ico" title="Cada número é quantos médicos passaram por aquela etapa naquele ${FX.gran === 'mes' ? 'mês' : 'dia'}. Clique no número para ver só esses médicos na lista.">ⓘ</span></div>
-    <div class="op-right">${cols.map((c, i) => `<div class="op-mh ${c.cur ? 'cur' : ''} ${c.we ? 'we' : ''}" style="left:calc(${i} * var(--dw))"><span class="op-mt"><span>${c.label}<small>${c.sub}</small></span>${FX.gran === 'mes' && c.start <= now ? `<button class="op-mtoggle" data-expand="${i}" title="Abrir os dias de ${c.tag}">⤢</button>` : ''}</span></div>`).join('')}</div></div>`;
+  const head = `<div class="op-row op-head"><div class="op-left"><span id="fx-sumtoggle" style="cursor:pointer" title="Recolher / abrir o resumo">${FX.sumOpen ? '▾' : '▸'} Resumo ${{ dia: 'diário', semana: 'semanal', mes: 'mensal' }[FX.gran]}</span><span class="info-ico" title="Cada número é quantos médicos passaram por aquela etapa naquele ${{ dia: 'dia', semana: 'semana', mes: 'mês' }[FX.gran]}. Clique no número para ver só esses médicos na lista.">ⓘ</span></div>
+    <div class="op-right">${cols.map((c, i) => `<div class="op-mh ${c.cur ? 'cur' : ''} ${c.we ? 'we' : ''}" style="left:calc(${i} * var(--dw))"><span class="op-mt"><span>${c.label}<small>${c.sub}</small></span>${c.expand && c.start <= now ? `<button class="op-mtoggle" data-expand="${i}" title="Abrir os dias de ${c.tag}">⤢</button>` : ''}</span></div>`).join('')}</div></div>`;
 
   const sum = `<div class="op-sumbox">${shownStages.map((s) => `<div class="op-sumrow"><div class="op-left ${F.stage === s.id ? 'sel' : ''}" data-sstage="${s.id}" title="${FINAL_STAGES.includes(s.id) ? 'Encerramentos: conta só no dia em que aconteceu' : 'Filtrar por quem está hoje nesta etapa'}"><span class="op-dot" style="background:${esc(s.color)}"></span>${esc(s.label)}<b style="margin-left:auto;font-family:Poppins">${FINAL_STAGES.includes(s.id) ? list.filter((d) => d.stage === s.id && closedInWindow(d)).length : list.filter((d) => d.stage === s.id).length}</b></div>
     <div class="op-right">${counts[s.id].map((n, i) => {
@@ -473,10 +535,10 @@ function renderJornada(list) {
       <div class="op-left"><div class="n"><span class="sdot s-${sla ? sla.status : 'none'}"></span>${esc(d.name)}${d.priority === 'urgente' ? '<span class="tagx bad">URG</span>' : d.priority === 'hospital_novo' ? '<span class="tagx warn">3h</span>' : ''}</div>
         <div class="m">${esc(d.hospital)}${d.crm ? ' · ' + esc(d.crm) : ''}${d.status_especialidade ? ' · ' + esc(d.status_especialidade) : ''}${(d.setores || []).length ? ' · ' + esc(d.setores.join(', ')) : ''} · ${daysIn(d)}d${sla ? ` · <span style="color:${sla.status === 'urgent' ? 'var(--red)' : sla.status === 'warning' ? 'var(--amber)' : 'inherit'}">${sla.status === 'urgent' ? 'SLA vencido' : 'SLA ' + fmtRemaining(sla.remaining)}</span>` : ` · ${esc(stageLabel(d.stage))}`}${nextInline(d)}</div></div>
       <div class="op-right">${todayPos >= 0 ? `<div class="op-today" style="left:calc(${todayPos} * var(--dw))"></div>` : ''}
-        ${segs.map((s) => { const st = stageById(s.st); const w = s.end - s.start + 1; return `<div class="seg" style="left:calc(${s.start} * var(--dw) + 2px);width:calc(${w} * var(--dw) - 4px);background:${esc(st?.color || '#999')}" title="${esc(st?.label || s.st)}">${w >= 2 || FX.gran === 'mes' ? esc(st?.label || '') : ''}</div>`; }).join('')}</div></div>`;
+        ${segs.map((s) => { const st = stageById(s.st); const w = s.end - s.start + 1; return `<div class="seg" style="left:calc(${s.start} * var(--dw) + 2px);width:calc(${w} * var(--dw) - 4px);background:${esc(st?.color || '#999')}" title="${esc(st?.label || s.st)}">${w >= 2 || FX.gran !== 'dia' ? esc(st?.label || '') : ''}</div>`; }).join('')}</div></div>`;
   };
 
-  body.innerHTML = `<div class="op-scroll" style="--ndays:${cols.length};--dw:${FX.gran === 'mes' ? '96px' : '56px'}"><div class="op-sticky">${head}${FX.sumOpen ? sum : ''}</div>${countRow}${rows.slice(0, FX.limit).map(rowHtml).join('') || '<div class="op-more">Nenhum médico com esses filtros.</div>'}
+  body.innerHTML = `<div class="op-scroll" style="--ndays:${cols.length};--dw:${{ dia: '56px', semana: '70px', mes: '96px' }[FX.gran]}"><div class="op-sticky">${head}${FX.sumOpen ? sum : ''}</div>${countRow}${rows.slice(0, FX.limit).map(rowHtml).join('') || '<div class="op-more">Nenhum médico com esses filtros.</div>'}
     ${rows.length > FX.limit ? `<div class="op-more"><button class="btn btn-line btn-sm" id="fx-morerows">Mostrar mais ${Math.min(300, rows.length - FX.limit)} de ${rows.length - FX.limit}</button></div>` : `<div class="op-more">Fim da lista (${rows.length})</div>`}</div>`;
 
   $$('#fx-body [data-doc]').forEach((r) => r.onclick = () => openDoctor(S.doctors.find((x) => x.id === r.dataset.doc)));
@@ -498,9 +560,9 @@ function renderJornada(list) {
     e.stopPropagation();
     const c = cols[+b.dataset.expand];
     const t = new Date(); t.setHours(0, 0, 0, 0);
-    FX.gran = 'dia'; FX.cell = null;
-    FX.offset = Math.round((c.start - t) / 864e5) + 17; // janela diária começa no dia 1 do mês
-    try { localStorage.setItem('flow:gran', 'dia'); } catch (_) { /* ignora */ }
+    const fim = new Date(c.end); fim.setDate(fim.getDate() - 1);
+    FX.per = { preset: 'custom', start: ymd(c.start), end: ymd(fim < t ? fim : t), gran: 'dia' };
+    FX.cell = null; savePer();
     refreshFluxo();
   });
   renderCellChip();
