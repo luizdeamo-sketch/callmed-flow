@@ -149,11 +149,11 @@ function bindNextStrip(d, redraw) {
   const f = $('#na-done'); if (f) f.onclick = () => nextActionDialog(d, { concluir: true, onDone: redraw });
 }
 
-// ---------- painel ☀️ Hoje ----------
+// ---------- painel Hoje ----------
 const HJ = { onlyMine: true };
 async function openHoje() {
   const m = openModal(`
-    <div class="modal-head"><div><h2>☀️ Hoje — o que preciso fazer</h2><div class="om-sub">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</div></div><button class="x" data-close>✕</button></div>
+    <div class="modal-head"><div><h2>Hoje</h2><div class="om-sub">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</div></div><button class="x" data-close>✕</button></div>
     <div class="modal-body" id="hj-body"><div class="op-more">Carregando...</div></div>`, { size: 'lg', onClose: () => { if (currentView === 'fluxo') refreshFluxo(); } });
   const draw = async () => {
     const body = $('#hj-body', m.el);
@@ -170,21 +170,27 @@ async function openHoje() {
       .sort((a, b) => new Date(b.entry_date) - new Date(a.entry_date));
     const tars = (tarefas || []).filter((t) => !HJ.onlyMine || t.responsavel_id === me || t.created_by === me);
     const row = (d, right, sub) => `<div class="hj-row"><a href="#" data-openp="${d.id}">${esc(d.name)}</a> <small class="muted">· ${esc(d.hospital)}${sub ? ' · ' + sub : ''}</small><span class="hj-right">${right || ''}</span></div>`;
-    const sec = (title, cnt, html, hint) => `<div class="es-box"><div class="ql">${title} <span class="tagx" style="margin-left:6px">${cnt}</span>${hint ? `<span class="hint" style="margin:0 0 0 8px;text-transform:none;letter-spacing:0;font-family:Inter">${hint}</span>` : ''}</div>${html || '<div class="hint" style="margin:0">Nada por aqui. 👍</div>'}</div>`;
+    const sec = (title, cnt, html, hint) => `<div class="es-box"><div class="ql">${title} <span class="tagx" style="margin-left:6px">${cnt}</span>${hint ? `<span class="hint" style="margin:0 0 0 8px;text-transform:none;letter-spacing:0;font-family:inherit;font-weight:400">${hint}</span>` : ''}</div>${html || '<div class="hint" style="margin:0">Nada por aqui.</div>'}</div>`;
     body.innerHTML = `
-      <div class="sg-row" style="margin-bottom:10px"><label class="small" style="display:flex;gap:6px;align-items:center"><input type="checkbox" id="hj-mine" ${HJ.onlyMine ? 'checked' : ''}> Só as minhas (${esc(actorName())})</label><span style="flex:1"></span>
-        <span class="tagx">${nextCounts(false).late} atrasadas no time todo</span></div>
-      ${sec('⏰ Ações de hoje e atrasadas', acoes.length, acoes.map((d) => {
+      <div class="sg-row" style="margin-bottom:14px"><div class="seg-toggle" id="hj-mine"><button data-m="1" class="${HJ.onlyMine ? 'active' : ''}">Só as minhas</button><button data-m="0" class="${HJ.onlyMine ? '' : 'active'}">Toda a equipe</button></div><span style="flex:1"></span>
+        <span class="muted small">${nextCounts(false).late} atrasadas no time todo</span></div>
+      <div class="hj-kpis">
+        <div class="kpi"><span class="l">Ações para hoje</span><span class="v">${acoes.filter((d) => daysTo(d.proxima_data) === 0).length}</span></div>
+        <div class="kpi"><span class="l">Atrasadas</span><span class="v" style="color:var(--red)">${acoes.filter((d) => daysTo(d.proxima_data) < 0).length}</span></div>
+        <div class="kpi"><span class="l">SLA vencendo</span><span class="v" style="color:var(--amber-ink)">${slaHoje.length}</span></div>
+        <div class="kpi"><span class="l">Encerrados hoje</span><span class="v" style="color:var(--green)">${encerradosHoje.length}</span></div>
+      </div>
+      ${sec('Ações de hoje e atrasadas', acoes.length, acoes.map((d) => {
         const n = daysTo(d.proxima_data);
         return `<div class="hj-row"><a href="#" data-openp="${d.id}">${esc(d.name)}</a> <small class="muted">· ${esc(d.hospital)} · ${esc(stageLabel(d.stage))}</small>
           <div class="hj-act">→ <b>${esc(d.proxima_acao)}</b>${HJ.onlyMine ? '' : ' · ' + esc(respName(d.proximo_responsavel_id))} ${n < 0 ? `<span class="tagx bad">atrasada ${-n}d</span>` : '<span class="tagx warn">hoje</span>'}
-          <span class="hj-right">${d.whatsapp ? `<a class="btn btn-line btn-sm" href="${waLink(d.whatsapp, '')}" target="_blank" rel="noopener" data-wa="${d.id}">💬</a>` : ''}<button class="btn btn-primary btn-sm" data-done="${d.id}">✔ Feito</button><button class="btn btn-line btn-sm" data-adiar="${d.id}" title="Adiar para o próximo dia útil">Amanhã</button></span></div></div>`;
+          <span class="hj-right">${d.whatsapp ? `<a class="btn btn-line btn-sm" href="${waLink(d.whatsapp, '')}" target="_blank" rel="noopener" data-wa="${d.id}" aria-label="WhatsApp">${ic('chat', 14)}</a>` : ''}<button class="btn btn-dark btn-sm" data-done="${d.id}">${ic('check', 14)}Feito</button><button class="btn btn-line btn-sm" data-adiar="${d.id}" title="Adiar para o próximo dia útil">Amanhã</button></span></div></div>`;
       }).join(''))}
-      ${sec('🚨 SLA vencendo (últimas horas do prazo)', slaHoje.length, slaHoje.slice(0, 40).map((d) => row(d, `<span class="slapill warning">${fmtRemaining(doctorSla(d).remaining)}</span>`, esc(stageLabel(d.stage)))).join(''), 'mova de etapa antes que vença')}
-      ${HJ.onlyMine ? '' : sec('⚠ Em andamento sem próxima ação', semAcao.length, semAcao.slice(0, 40).map((d) => row(d, `<button class="btn btn-line btn-sm" data-def="${d.id}">Definir</button>`, esc(stageLabel(d.stage)))).join('') + (semAcao.length > 40 ? `<div class="hint">+${semAcao.length - 40} outros — use a pílula “sem próxima ação” no Fluxo.</div>` : ''))}
-      ${encaminhados.length ? sec('📨 Cadastros que encaminhei (em andamento)', encaminhados.length, encaminhados.slice(0, 40).map((d) => row(d, `<span class="tagx mute">${esc(respName(d.proximo_responsavel_id))}</span>`, `${esc(stageLabel(d.stage))} · há ${Math.floor((Date.now() - new Date(d.entry_date)) / 864e5)}d`)).join(''), 'para acompanhar sem precisar cobrar') : ''}
-      ${sec('✅ Encerrados hoje', encerradosHoje.length, encerradosHoje.map((d) => row(d, `<span class="tagx ${d.stage === 'aprovado' ? 'ok' : 'bad'}">${esc(stageLabel(d.stage))}</span>`)).join(''))}
-      <div class="es-box"><div class="ql">📝 Tarefas avulsas</div>
+      ${sec('SLA vencendo (últimas horas do prazo)', slaHoje.length, slaHoje.slice(0, 40).map((d) => row(d, `<span class="slapill warning">${fmtRemaining(doctorSla(d).remaining)}</span>`, esc(stageLabel(d.stage)))).join(''), 'mova de etapa antes que vença')}
+      ${HJ.onlyMine ? '' : sec('Em andamento sem próxima ação', semAcao.length, semAcao.slice(0, 40).map((d) => row(d, `<button class="btn btn-line btn-sm" data-def="${d.id}">Definir</button>`, esc(stageLabel(d.stage)))).join('') + (semAcao.length > 40 ? `<div class="hint">+${semAcao.length - 40} outros — use a pílula “sem próxima ação” no Fluxo.</div>` : ''))}
+      ${encaminhados.length ? sec('Cadastros que encaminhei (em andamento)', encaminhados.length, encaminhados.slice(0, 40).map((d) => row(d, `<span class="tagx mute">${esc(respName(d.proximo_responsavel_id))}</span>`, `${esc(stageLabel(d.stage))} · há ${Math.floor((Date.now() - new Date(d.entry_date)) / 864e5)}d`)).join(''), 'para acompanhar sem precisar cobrar') : ''}
+      ${sec('Encerrados hoje', encerradosHoje.length, encerradosHoje.map((d) => row(d, `<span class="tagx ${d.stage === 'aprovado' ? 'ok' : 'bad'}">${esc(stageLabel(d.stage))}</span>`)).join(''))}
+      <div class="es-box"><div class="ql">Tarefas avulsas</div>
         ${tars.map((t) => `<div class="hj-row"><label class="small" style="display:flex;gap:8px;align-items:center;flex:1"><input type="checkbox" data-task="${t.id}" ${t.concluida ? 'checked' : ''}> <span style="${t.concluida ? 'text-decoration:line-through;color:var(--ink-faint)' : ''}">${esc(t.descricao)}</span>
           ${t.data < ymdToday() ? `<span class="tagx bad">de ${fmtYmd(t.data)}</span>` : ''}${HJ.onlyMine ? '' : `<small class="muted">· ${esc(respName(t.responsavel_id))}</small>`}</label>
           ${t.created_by === me || S.isAdmin ? `<button class="btn-ghost" data-deltask="${t.id}" style="color:var(--ink-faint)">✕</button>` : ''}</div>`).join('') || '<div class="hint" style="margin:0">Nenhuma tarefa.</div>'}
@@ -192,7 +198,7 @@ async function openHoje() {
         <div class="hint">Tarefas não concluídas de dias anteriores continuam aparecendo aqui até serem marcadas.</div></div>`;
     const byId = (id) => S.doctors.find((x) => x.id === id);
     $$('[data-openp]', body).forEach((a) => a.onclick = (e) => { e.preventDefault(); m.close(); openDoctor(byId(a.dataset.openp)); });
-    $('#hj-mine', body).onchange = (e) => { HJ.onlyMine = e.target.checked; draw(); };
+    $$('#hj-mine button', body).forEach((b) => b.onclick = () => { HJ.onlyMine = b.dataset.m === '1'; draw(); });
     $$('[data-done]', body).forEach((b) => b.onclick = () => nextActionDialog(byId(b.dataset.done), { concluir: true, onDone: draw }));
     $$('[data-def]', body).forEach((b) => b.onclick = () => nextActionDialog(byId(b.dataset.def), { onDone: draw }));
     $$('[data-adiar]', body).forEach((b) => b.onclick = async () => {

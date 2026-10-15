@@ -5,13 +5,56 @@ const sb = supabase.createClient(window.FLOW_CONFIG.url, window.FLOW_CONFIG.key,
   auth: { persistSession: true, autoRefreshToken: true, detectSessionInUrl: true },
 });
 
+// ---------- ícones de linha (traço herda a cor do texto) ----------
+const ICONS = {
+  fluxo: '<rect width="8" height="8" x="3" y="3" rx="2"/><path d="M7 11v4a2 2 0 0 0 2 2h4"/><rect width="8" height="8" x="13" y="13" rx="2"/>',
+  hoje: '<circle cx="12" cy="12" r="4"/><path d="M12 2v2M12 20v2M4.93 4.93l1.41 1.41M17.66 17.66l1.41 1.41M2 12h2M20 12h2M6.34 17.66l-1.41 1.41M19.07 4.93l-1.41 1.41"/>',
+  chart: '<path d="M3 3v18h18"/><path d="M18 17V9"/><path d="M13 17V5"/><path d="M8 17v-3"/>',
+  rqe: '<path d="M22 10 12 5 2 10l10 5 10-5Z"/><path d="M6 12v5c3 3 9 3 12 0v-5"/>',
+  file: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/><path d="M16 13H8M16 17H8M10 9H8"/>',
+  history: '<path d="M3 12a9 9 0 1 0 9-9 9.75 9.75 0 0 0-6.74 2.74L3 8"/><path d="M3 3v5h5"/><path d="M12 7v5l4 2"/>',
+  idea: '<path d="M15 14c.2-1 .7-1.7 1.5-2.5 1-.9 1.5-2.2 1.5-3.5A6 6 0 0 0 6 8c0 1 .2 2.2 1.5 3.5.7.7 1.3 1.5 1.5 2.5"/><path d="M9 18h6M10 22h4"/>',
+  users: '<path d="M16 21v-2a4 4 0 0 0-4-4H6a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M22 21v-2a4 4 0 0 0-3-3.87M16 3.13a4 4 0 0 1 0 7.75"/>',
+  bell: '<path d="M6 8a6 6 0 0 1 12 0c0 7 3 9 3 9H3s3-2 3-9"/><path d="M10.3 21a1.94 1.94 0 0 0 3.4 0"/>',
+  refresh: '<path d="M3 12a9 9 0 0 1 9-9 9.75 9.75 0 0 1 6.74 2.74L21 8"/><path d="M21 3v5h-5"/><path d="M21 12a9 9 0 0 1-9 9 9.75 9.75 0 0 1-6.74-2.74L3 16"/><path d="M8 16H3v5"/>',
+  download: '<path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><path d="m7 10 5 5 5-5"/><path d="M12 15V3"/>',
+  logout: '<path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4"/><path d="m16 17 5-5-5-5"/><path d="M21 12H9"/>',
+  sliders: '<path d="M4 21v-7M4 10V3M12 21v-9M12 8V3M20 21v-5M20 12V3M1 14h6M9 8h6M17 16h6"/>',
+  calendar: '<rect width="18" height="18" x="3" y="4" rx="2"/><path d="M16 2v4M8 2v4M3 10h18"/>',
+  flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
+  mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
+  chat: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  edit: '<path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>',
+  trash: '<path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
+  mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>',
+  clip: '<path d="m21.44 11.05-9.19 9.19a6 6 0 0 1-8.49-8.49l8.57-8.57A4 4 0 1 1 18 8.84l-8.59 8.57a2 2 0 0 1-2.83-2.83l8.49-8.48"/>',
+  doc: '<path d="M15 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V7Z"/><path d="M14 2v4a2 2 0 0 0 2 2h4"/>',
+  clock: '<circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/>',
+  alert: '<path d="m21.73 18-8-14a2 2 0 0 0-3.48 0l-8 14A2 2 0 0 0 4 21h16a2 2 0 0 0 1.73-3"/><path d="M12 9v4M12 17h.01"/>',
+  send: '<path d="m22 2-7 20-4-9-9-4Z"/><path d="M22 2 11 13"/>',
+  note: '<path d="M9 11l3 3L22 4"/><path d="M21 12v7a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h11"/>',
+  plus: '<path d="M12 5v14M5 12h14"/>',
+  check: '<path d="M20 6 9 17l-5-5"/>',
+  arrow: '<path d="M5 12h14M12 5l7 7-7 7"/>',
+  gear: '<circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/>',
+  kanban: '<rect width="18" height="18" x="3" y="3" rx="2"/><path d="M8 7v7M12 7v4M16 7v9"/>',
+  route: '<path d="M3 12h4l3-8 4 16 3-8h4"/>',
+  hosp: '<path d="M12 6v4M14 14h-4M14 18h-4M14 8h-4"/><path d="M18 12h2a2 2 0 0 1 2 2v6a2 2 0 0 1-2 2H4a2 2 0 0 1-2-2v-9a2 2 0 0 1 2-2h2"/><path d="M18 22V4a2 2 0 0 0-2-2H8a2 2 0 0 0-2 2v18"/>',
+};
+/** Ícone de linha em SVG (herda a cor do texto). */
+function ic(name, size) {
+  const s = size || 16;
+  return `<svg class="ic" aria-hidden="true" width="${s}" height="${s}" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round">${ICONS[name] || ''}</svg>`;
+}
+document.querySelectorAll('[data-ic]').forEach((el) => { el.outerHTML = ic(el.dataset.ic, +el.dataset.size || 16); });
+
 // ---------- constantes do domínio (copiadas do Flow original) ----------
 const SETORES = ['UTI', 'ANESTESIA', 'ENFERMARIA', 'AMBULATÓRIO', 'PREVENT', 'PRONTO ATENDIMENTO', 'SADT', 'EMERGÊNCIA', 'ORTOPEDIA'];
 const STATUS_ESP = ['FORMADO', 'FORMADO C/ RQE', 'R1', 'R2', 'R3'];
 const DISC = ['ADERENTE', 'NÃO APLICAVEL', 'REPROVADO', 'AGUARDANDO RETORNO'];
 const DISC_LABEL = { 'ADERENTE': 'Aderente', 'NÃO APLICAVEL': 'Não Aplicável', 'REPROVADO': 'Reprovado', 'AGUARDANDO RETORNO': 'Ag. Retorno' };
 const DISC_CLASS = { 'ADERENTE': 'g', 'REPROVADO': 'r', 'AGUARDANDO RETORNO': 'a', 'NÃO APLICAVEL': '' };
-const PRIORITIES = { rotina: '🟢 Rotina', urgente: '🔴 Urgente', hospital_novo: '🏥 Hospital Novo - SLA 3h' };
+const PRIORITIES = { rotina: 'Rotina', urgente: 'Urgente', hospital_novo: 'Hospital novo · SLA 3h' };
 const SETOR_USUARIO = { cadastro: 'Cadastro', escalas: 'Escalas', marketing: 'Marketing', diretoria: 'Diretoria' };
 const REQUIRED_DOCUMENTS = [
   'Antecedente Criminal', 'ATLS/ACLS', 'Carta de Recomendação / Declaração de Experiência', 'Carteira de CRM - Frente e verso',
@@ -372,16 +415,19 @@ function subscribeNotifs() {
 // ---------- navegação ----------
 const VIEWS = {};
 const VIEW_TITLES = { fluxo: 'Fluxo', medico: 'Médico', indicadores: 'Indicadores', sugestoes: 'Sugestões', rqe: 'RQE', relatorios: 'Relatórios', auditoria: 'Auditoria', usuarios: 'Administração' };
+const VIEW_SUBS = { fluxo: 'Credenciamento de médicos', indicadores: 'Funil, SLA e gargalos', rqe: 'Registro de especialista no CREMESP', relatorios: 'Conversão, tempo e produtividade', auditoria: 'Quem fez o quê, e quando', sugestoes: 'Ideias e problemas do sistema', usuarios: 'Usuários e hospitais' };
 let currentView = 'fluxo';
 function go(view) {
   currentView = view;
   $$('#rail .nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === (view === 'medico' ? 'fluxo' : view)));
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
   $('#hdr-title').textContent = VIEW_TITLES[view];
+  $('#hdr-sub').textContent = VIEW_SUBS[view] || '';
   try { localStorage.setItem('flow:view', view); } catch (_) { /* ignora */ }
   VIEWS[view] && VIEWS[view]();
 }
 $$('#rail .nav-btn').forEach((b) => b.addEventListener('click', () => go(b.dataset.view)));
+$('#rail-hoje').addEventListener('click', () => openHoje());
 
 async function reloadAll(silent) {
   const btn = $('#btn-reload');
@@ -397,7 +443,11 @@ $('#btn-reload').onclick = () => reloadAll(false);
 
 async function startApp() {
   showOnly('app');
-  $('#who-chip').innerHTML = `${esc(S.profile.display_name || S.user.email)}${S.profile.setor ? `<small>${esc(SETOR_USUARIO[S.profile.setor] || S.profile.setor)}</small>` : ''}`;
+  { const nm = S.profile.display_name || S.user.email || '';
+    const pt = nm.replace(/@.*/, '').split(/[\s._-]+/).filter(Boolean);
+    const chip = $('#who-chip');
+    chip.textContent = ((pt[0] || '?')[0] + (pt.length > 1 ? pt[pt.length - 1][0] : '')).toUpperCase();
+    chip.title = nm + (S.profile.setor ? ' · ' + (SETOR_USUARIO[S.profile.setor] || S.profile.setor) : ''); }
   $('#view-fluxo').innerHTML = '<div class="op-more">Carregando…</div>'; delete $('#view-fluxo').dataset.built;
   try { await loadCore(); } catch (err) { toast('Erro ao carregar dados: ' + err.message, 'err'); return; }
   $('#rail-usuarios').hidden = !S.isAdmin;
@@ -433,7 +483,7 @@ $('#btn-backup').onclick = async () => {
     X.writeFile(wb, `backup_callmed_flow_${new Date().toISOString().slice(0, 10)}.xlsx`);
     toast('Backup baixado', 'ok');
   } catch (e) { toast('Erro no backup: ' + e.message, 'err'); }
-  btn.disabled = false; btn.textContent = '⬇ Backup';
+  btn.disabled = false; btn.innerHTML = ic('download') + ' Backup';
 };
 
 // ---------- exportação ----------

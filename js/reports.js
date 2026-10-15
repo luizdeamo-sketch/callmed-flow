@@ -166,7 +166,7 @@ function drawReports(acts, rqes) {
   }
 
   root.innerHTML = `
-    <div class="pg-head"><h2>📑 Relatórios</h2><span class="sub">Conversão, tempo por etapa, SLA, hospitais e produtividade da equipe — com exportação.</span></div>
+    <div class="pg-head"><h2>Relatórios</h2><span class="sub">Conversão, tempo por etapa, SLA, hospitais e produtividade da equipe — com exportação.</span></div>
     <div class="toolbar">
       <select class="inp" id="rf-period">${opt('7', 'Últimos 7 dias', RF.period)}${opt('30', 'Últimos 30 dias', RF.period)}${opt('90', 'Últimos 90 dias', RF.period)}${opt('all', 'Todo o período', RF.period)}${opt('custom', 'Personalizado', RF.period)}</select>
       ${RF.period === 'custom' ? `<input type="date" class="inp" id="rf-from" value="${RF.from}"><input type="date" class="inp" id="rf-to" value="${RF.to}">` : ''}
@@ -177,7 +177,7 @@ function drawReports(acts, rqes) {
       <select class="inp" id="rf-owner"><option value="">Todos responsáveis</option>${owners.map((o) => opt(o, S.profiles[o]?.display_name || 'Usuário removido', RF.owner)).join('')}</select>
       <select class="inp" id="rf-sla"><option value="">Status SLA: todos</option>${opt('urgent', 'Vencidos', RF.slaStatus)}${opt('warning', 'Atenção', RF.slaStatus)}${opt('ok', 'No prazo', RF.slaStatus)}</select>
       <input class="inp" id="rf-q" placeholder="Buscar médico" value="${esc(RF.q)}" style="width:160px">
-      <button class="btn btn-line btn-sm" id="rf-csv">⬇ CSV</button><button class="btn btn-line btn-sm" id="rf-xlsx">⬇ XLSX</button>
+      <button class="btn btn-line btn-sm" id="rf-csv">${ic('download', 14)}CSV</button><button class="btn btn-line btn-sm" id="rf-xlsx">${ic('download', 14)}Excel</button>
     </div>
     <div class="kpis">
       <div class="kpi"><div class="l">Médicos no período</div><div class="v">${rep.entered}</div></div>
@@ -245,7 +245,7 @@ function drawAudit(rows) {
   const today = new Date().toDateString();
   const users = uniq(rows.map(who)).sort();
   root.innerHTML = `
-    <div class="pg-head"><h2>🕓 Auditoria</h2><span class="sub">Quem fez o quê, e quando — o nome é registrado pelo banco, não pelo navegador.</span></div>
+    <div class="pg-head"><h2>Auditoria</h2><span class="sub">Quem fez o quê, e quando — o nome é registrado pelo banco, não pelo navegador.</span></div>
     <div class="kpis">
       <div class="kpi"><div class="l">Registros carregados</div><div class="v">${rows.length}</div><div class="s">últimas 1.000 ações</div></div>
       <div class="kpi"><div class="l">Hoje</div><div class="v">${rows.filter((a) => new Date(a.created_at).toDateString() === today).length}</div></div>

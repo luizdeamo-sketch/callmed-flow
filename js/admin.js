@@ -18,7 +18,7 @@ async function renderAdmin() {
   if (!S.isAdmin) { root.innerHTML = '<div class="alert r">Acesso restrito a administradores.</div>'; return; }
   await loadCore().catch(() => {});
   const tabs = [['usuarios', 'Usuários'], ['hospitais', 'Hospitais'], ['migracao', 'Migração do Flow antigo']];
-  root.innerHTML = `<div class="pg-head"><h2>👥 Administração</h2><span class="sub">Quem acessa o Flow, com qual papel, e a lista oficial de hospitais.</span></div><div class="tabs">${tabs.map(([k, l]) => `<button data-atab="${k}" class="${adminTab === k ? 'active' : ''}">${l}</button>`).join('')}</div><div id="adm-body"></div>`;
+  root.innerHTML = `<div class="pg-head"><h2>Administração</h2><span class="sub">Quem acessa o Flow, com qual papel, e a lista oficial de hospitais.</span></div><div class="tabs">${tabs.map(([k, l]) => `<button data-atab="${k}" class="${adminTab === k ? 'active' : ''}">${l}</button>`).join('')}</div><div id="adm-body"></div>`;
   $$('[data-atab]', root).forEach((b) => b.onclick = () => { adminTab = b.dataset.atab; renderAdmin(); });
   ({ usuarios: drawUsers, hospitais: drawHospitals, migracao: drawMigration })[adminTab]();
 }
@@ -82,7 +82,7 @@ function drawUsers() {
           <button class="btn btn-line btn-sm" data-u="${u.user_id}" data-act="role">${admin ? 'Tirar admin' : 'Tornar admin'}</button>
           <button class="btn btn-line btn-sm" data-u="${u.user_id}" data-act="reset">Nova senha</button>
           <button class="btn ${u.ativo ? 'btn-danger' : 'btn-green'} btn-sm" data-u="${u.user_id}" data-act="active">${u.ativo ? 'Bloquear' : 'Reativar'}</button>`}
-          <button class="btn btn-line btn-sm" data-u="${u.user_id}" data-act="edit">✎</button></td></tr>`;
+          <button class="btn btn-line btn-sm" data-u="${u.user_id}" data-act="edit" aria-label="Editar">${ic('edit', 14)}</button></td></tr>`;
     }).join('')}</tbody></table></div>`;
   $('#u-new').onclick = () => userForm();
   $$('[data-act]', $('#adm-body')).forEach((b) => b.onclick = () => userAction(b.dataset.u, b.dataset.act));

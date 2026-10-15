@@ -26,7 +26,7 @@ function drawRqe() {
   const q = norm(R.search);
   const list = R.list.filter((r) => !q || norm(r.doctor?.name).includes(q) || norm(r.specialty).includes(q) || norm(r.doctor?.hospital).includes(q));
   root.innerHTML = `
-    <div class="pg-head"><h2>🎓 Solicitações de RQE</h2><span class="sub">Registro de Qualificação de Especialista no CREMESP — do pedido ao protocolo.</span></div>
+    <div class="pg-head"><h2>Solicitações de RQE</h2><span class="sub">Registro de Qualificação de Especialista no CREMESP — do pedido ao protocolo.</span></div>
     <div class="kpis">
       <div class="kpi"><div class="l">Total</div><div class="v">${R.list.length}</div></div>
       <div class="kpi"><div class="l">Aprovados</div><div class="v" style="color:var(--green)">${R.list.filter((r) => r.stage === 'aprovado').length}</div></div>
@@ -151,11 +151,11 @@ async function openRqe(r) {
         ${editing ? `<div class="field"><label>Especialidade</label><input class="inp" id="rq-esp" value="${esc(r.specialty)}"></div><div class="field"><label>Observações</label><textarea class="inp" id="rq-obs">${esc(r.observations)}</textarea></div>
           <div class="actions-row"><button class="btn btn-primary btn-sm" id="rq-save">Salvar</button><button class="btn btn-line btn-sm" id="rq-cancel">Cancelar</button></div>`
         : `${r.observations ? `<p style="font-style:italic;color:var(--ink-soft)">"${esc(r.observations)}"</p>` : ''}
-          <div class="actions-row"><button class="btn btn-line btn-sm" id="rq-edit">✎ Editar</button>
+          <div class="actions-row"><button class="btn btn-line btn-sm" id="rq-edit">${ic('edit', 14)}Editar</button>
           ${next ? `<button class="btn btn-line btn-sm" data-rmove="${next.id}">Mover → ${esc(next.label)}</button>` : ''}
           ${r.stage !== 'aprovado' ? '<button class="btn btn-green btn-sm" data-rmove="aprovado">✓ Aprovar</button>' : ''}
           ${r.stage !== 'reprovado' ? '<button class="btn btn-danger btn-sm" data-rmove="reprovado">✗ Reprovar</button>' : ''}
-          ${S.isAdmin ? '<button class="btn btn-line btn-sm" id="rq-del">🗑 Excluir</button>' : ''}</div>`}
+          ${S.isAdmin ? `<button class="btn btn-line btn-sm" id="rq-del">${ic('trash', 14)}Excluir</button>` : ''}</div>`}
         <div style="display:flex;align-items:center;gap:10px;margin:14px 0 6px"><b>Documentos CREMESP</b><span class="tag">${done}/${RQE_DOCUMENTS.length}</span><span class="prog"><i style="width:${(done / RQE_DOCUMENTS.length) * 100}%;background:var(--brand)"></i></span></div>
         ${RQE_DOCUMENTS.map((n) => {
           const d = docs[n];

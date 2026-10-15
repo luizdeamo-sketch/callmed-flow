@@ -8,11 +8,11 @@
 <link rel="icon" href="assets/favicon.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=JetBrains+Mono:wght@500&display=swap">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Geist:wght@400;500;600;700&family=Geist+Mono:wght@500&display=swap">
 <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2/dist/umd/supabase.js"></script>
 <style>
   :root{
-    --f-ui:'Inter',-apple-system,'Segoe UI',system-ui,sans-serif; --f-mono:'JetBrains Mono',ui-monospace,monospace;
+    --f-ui:'Geist',-apple-system,'Segoe UI',system-ui,sans-serif; --f-mono:'Geist Mono',ui-monospace,monospace;
     --bg:#f7f7f8; --surface:#ffffff; --surface-2:#fafafb; --surface-3:#f3f3f5;
     --border:#e5e5ea; --border-soft:#efeff2; --border-strong:#d4d4db;
     --ink:#17171c; --ink-soft:#56565f; --ink-faint:#9b9ba6;
@@ -615,6 +615,40 @@
   .sg-chip{ font-weight:500;}
   .dz{ border:1px dashed var(--border-strong); background:var(--surface-2);}
   .dz:hover, .dz.over{ background:var(--brand-soft);}
+  /* cabeçalho: título + subtítulo + avatar */
+  .hdr-sub{ display:inline; font-size:13px; color:var(--ink-faint); font-weight:400; margin-left:2px;}
+  .who .chip.avatar{ width:30px; height:30px; padding:0; border-radius:999px; background:var(--brand-soft); color:var(--brand); font-weight:600; font-size:12px; display:inline-flex; align-items:center; justify-content:center; margin-left:6px; cursor:default;}
+  #rail .badge-dot{ top:4px; right:8px;}
+  .icon-btn .ic{ width:16px; height:16px;}
+
+  /* entrada em duas colunas */
+  .gate-split{ padding:0; align-items:stretch; background:var(--surface);}
+  .gate-split .gs-form{ flex:1 1 480px; display:flex; align-items:center; justify-content:center; padding:48px 24px;}
+  .gate-split .login-card{ border:none; box-shadow:none; padding:0; max-width:360px; background:transparent;}
+  .gate-split .login-card h1{ font-size:1.6rem;}
+  .gate-split .login-card .sub{ font-size:14px; margin-bottom:26px;}
+  .gate-split .field label{ align-items:center;}
+  .gate-split .field input{ height:40px; font-size:14px;}
+  .btn-lg{ height:42px; font-size:14px; margin-top:6px;}
+  .gate-split .gs-side{ flex:1 1 480px; background:#0b1240; color:#fff; padding:56px; display:flex; flex-direction:column; justify-content:flex-end; gap:10px;}
+  .gs-k{ font-size:13px; color:#9ea7e6; font-weight:500;}
+  .gs-quote{ margin:0; font-size:28px; line-height:1.3; font-weight:500; letter-spacing:-.02em; max-width:460px;}
+  @media (max-width: 900px){ .gate-split .gs-side{ display:none;} }
+
+  /* barra do Fluxo em duas linhas */
+  .op-kpirow{ display:flex; gap:6px; flex-wrap:wrap; align-items:center;}
+  .op-filters > button .ic, .per-btn .ic, .seg-toggle .ic{ color:var(--ink-faint);}
+  .btn-new{ height:32px; border:0 !important; border-radius:var(--radius-sm) !important; background:var(--brand) !important; color:#fff !important; padding:0 14px !important; font-weight:500; display:inline-flex; align-items:center; gap:7px; box-shadow:0 1px 2px rgba(16,41,232,.25) !important;}
+  .btn-new:hover{ background:var(--brand-hover) !important;}
+  .op-kpi.warn b{ color:var(--amber-ink);}
+  .op-kpi.dim{ background:var(--surface-3); border-color:transparent;}
+  .op-filters input:not([type=checkbox]):not([type=radio]):not([type=file]){ width:250px;}
+  .hj-kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px;}
+  @media (max-width: 760px){ .hj-kpis{ grid-template-columns:repeat(2,minmax(0,1fr));} }
+  .btn-dark{ background:var(--ink); color:#fff; border-color:var(--ink);} .btn-dark:hover{ background:#000;}
+  .op-sumcell.clk{ color:var(--ink);} .op-sumcell.clk:hover{ color:var(--brand);}
+  .hist .it .ic{ color:var(--ink-faint); vertical-align:-2px; margin-right:2px;}
+  .seg-toggle button{ height:26px;}
   @media (max-width: 900px){ .pv-grid{ grid-template-columns:1fr;} }
   @media (max-width: 760px){
     .op-top{ padding:12px;} .op-filters input:not([type=checkbox]):not([type=radio]):not([type=file]){ width:100%;}
@@ -634,18 +668,24 @@
 <body>
 
 <!-- login -->
-<div id="login-screen" class="gate" hidden>
-  <div class="login-card">
-    <img class="logo" src="assets/logo-azul.png" alt="CallMed">
-    <h1>CallMed Flow</h1>
-    <div class="sub">Controle de Cadastro Geral — acesso restrito à equipe CallMed.</div>
-    <form id="login-form">
-      <div class="field"><label>E-mail</label><input id="login-email" type="email" autocomplete="username" required></div>
-      <div class="field"><label>Senha</label><input id="login-pass" type="password" autocomplete="current-password" required></div>
-      <button class="btn btn-primary btn-block" id="btn-login" type="submit">Entrar</button>
-    </form>
-    <button class="btn-ghost" id="btn-forgot" type="button">Esqueci minha senha</button>
-    <div class="err" id="login-err"></div>
+<div id="login-screen" class="gate gate-split" hidden>
+  <div class="gs-form">
+    <div class="login-card">
+      <img class="logo" src="assets/logo-azul.png" alt="CallMed">
+      <h1>Entrar no Flow</h1>
+      <div class="sub">Credenciamento de médicos. Acesso restrito à equipe CallMed.</div>
+      <form id="login-form">
+        <div class="field"><label for="login-email">E-mail</label><input id="login-email" type="email" autocomplete="username" placeholder="nome@callmedsaude.com.br" required></div>
+        <div class="field"><label for="login-pass" style="display:flex;justify-content:space-between">Senha<button class="btn-ghost" id="btn-forgot" type="button" style="padding:0">Esqueci minha senha</button></label><input id="login-pass" type="password" autocomplete="current-password" required></div>
+        <button class="btn btn-primary btn-block btn-lg" id="btn-login" type="submit">Entrar</button>
+      </form>
+      <div class="err" id="login-err"></div>
+      <div class="hint">Sem acesso? Peça a um administrador do Flow.</div>
+    </div>
+  </div>
+  <div class="gs-side">
+    <span class="gs-k">CallMed Flow</span>
+    <p class="gs-quote">Cada médico, em cada hospital, da primeira mensagem à aprovação.</p>
   </div>
 </div>
 
@@ -677,30 +717,31 @@
 <div id="app">
   <header>
     <div class="brand">
-      <img src="assets/logo-azul.png" alt="CallMed"><span class="dot"></span>
-      <span class="hdr-title" id="hdr-title">Fluxo</span><span class="info-ico" tabindex="0" title="Cada card é um médico em um hospital. A Jornada mostra dia a dia em que etapa do credenciamento ele esteve; o Kanban serve para mover de etapa arrastando. Clique no nome para abrir a ficha completa.">ⓘ</span>
+      <img src="assets/logo-azul.png" alt="CallMed">
+      <span class="hdr-title" id="hdr-title">Fluxo</span><span class="hdr-sub" id="hdr-sub">Credenciamento de médicos</span><span class="info-ico" tabindex="0" title="Cada card é um médico em um hospital. A Jornada mostra dia a dia em que etapa do credenciamento ele esteve; o Kanban serve para mover de etapa arrastando. Clique no nome para abrir a ficha completa.">i</span>
     </div>
     <div class="who">
       <span class="who-email" id="who-email"></span>
-      <button class="icon-btn" id="btn-backup" title="Baixar uma cópia de todos os dados do Flow (Excel)" hidden>⬇ Backup</button>
-      <span class="chip" id="who-chip"></span>
-      <button class="icon-btn" id="btn-reload" title="Recarregar dados">⟳</button>
+      <button class="icon-btn" id="btn-backup" title="Baixar uma cópia de todos os dados do Flow (Excel)" hidden><i data-ic="download"></i> Backup</button>
+      <button class="icon-btn" id="btn-reload" title="Recarregar dados" aria-label="Recarregar dados"><i data-ic="refresh"></i></button>
       <div style="position:relative">
-        <button class="icon-btn" id="btn-bell" title="Notificações">🔔<span class="badge-dot" id="bell-count" hidden></span></button>
+        <button class="icon-btn" id="btn-bell" title="Notificações" aria-label="Notificações"><i data-ic="bell"></i><span class="badge-dot" id="bell-count" hidden></span></button>
         <div class="pop" id="notif-pop" hidden></div>
       </div>
-      <button class="icon-btn" id="btn-logout" title="Sair">Sair</button>
+      <button class="icon-btn" id="btn-logout" title="Sair" aria-label="Sair"><i data-ic="logout"></i></button>
+      <span class="chip avatar" id="who-chip"></span>
     </div>
   </header>
 
   <nav id="rail">
-    <button class="nav-btn active" data-view="fluxo" title="Jornada e Kanban dos cadastros">🧭<span>Fluxo</span></button>
-    <button class="nav-btn" data-view="indicadores" title="Indicadores do funil e do SLA">📊<span>Indicad.</span></button>
-    <button class="nav-btn" data-view="rqe" title="Solicitações de RQE">🎓<span>RQE</span></button>
-    <button class="nav-btn" data-view="relatorios" title="Relatórios e exportação">📑<span>Relatórios</span></button>
-    <button class="nav-btn" data-view="auditoria" title="Quem fez o quê, e quando">🕓<span>Auditoria</span></button>
-    <button class="nav-btn" data-view="sugestoes" title="Sugestões de melhoria do sistema">💡<span>Sugestões</span></button>
-    <button class="nav-btn" data-view="usuarios" title="Usuários, hospitais e migração" id="rail-usuarios" hidden>👥<span>Admin</span></button>
+    <button class="nav-btn active" data-view="fluxo" title="Jornada e Kanban dos cadastros"><i data-ic="fluxo" data-size="19"></i><span>Fluxo</span></button>
+    <button class="rail-btn" id="rail-hoje" title="Hoje: o que preciso fazer" style="position:relative"><i data-ic="hoje" data-size="19"></i><span>Hoje</span><span class="badge-dot" id="rail-hoje-n" hidden></span></button>
+    <button class="nav-btn" data-view="indicadores" title="Indicadores do funil e do SLA"><i data-ic="chart" data-size="19"></i><span>Indicadores</span></button>
+    <button class="nav-btn" data-view="rqe" title="Solicitações de RQE"><i data-ic="rqe" data-size="19"></i><span>RQE</span></button>
+    <button class="nav-btn" data-view="relatorios" title="Relatórios e exportação"><i data-ic="file" data-size="19"></i><span>Relatórios</span></button>
+    <button class="nav-btn" data-view="auditoria" title="Quem fez o quê, e quando"><i data-ic="history" data-size="19"></i><span>Auditoria</span></button>
+    <button class="nav-btn" data-view="sugestoes" title="Sugestões de melhoria do sistema"><i data-ic="idea" data-size="19"></i><span>Sugestões</span></button>
+    <button class="nav-btn" data-view="usuarios" title="Usuários, hospitais e migração" id="rail-usuarios" hidden><i data-ic="users" data-size="19"></i><span>Admin</span></button>
   </nav>
 
   <div class="view-container">
@@ -718,14 +759,14 @@
 <div id="modal-root"></div>
 <div id="toasts"></div>
 
-<script src="config.js?v=20261013094251"></script>
-<script src="js/core.js?v=20261013094251"></script>
-<script src="js/hoje.js?v=20261013094251"></script>
-<script src="js/fluxo.js?v=20261013094251"></script>
-<script src="js/doctor.js?v=20261013094251"></script>
-<script src="js/rqe.js?v=20261013094251"></script>
-<script src="js/reports.js?v=20261013094251"></script>
-<script src="js/sugestoes.js?v=20261013094251"></script>
-<script src="js/admin.js?v=20261013094251"></script>
+<script src="config.js?v=20261015091452"></script>
+<script src="js/core.js?v=20261015091452"></script>
+<script src="js/hoje.js?v=20261015091452"></script>
+<script src="js/fluxo.js?v=20261015091452"></script>
+<script src="js/doctor.js?v=20261015091452"></script>
+<script src="js/rqe.js?v=20261015091452"></script>
+<script src="js/reports.js?v=20261015091452"></script>
+<script src="js/sugestoes.js?v=20261015091452"></script>
+<script src="js/admin.js?v=20261015091452"></script>
 </body>
 </html>

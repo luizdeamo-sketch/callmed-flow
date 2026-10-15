@@ -83,22 +83,21 @@ function renderFluxo() {
     root.innerHTML = `
       <div class="op-top">
         <div class="op-filters">
-          <span id="fx-kpis" class="op-kpis" style="display:contents"></span>
-          <input id="f-search" placeholder="Buscar por nome, CRM, CPF, hospital ou telefone...">
+          <input id="f-search" placeholder="Buscar nome, CRM, CPF, hospital ou telefone" aria-label="Buscar médico">
           <div style="position:relative" id="f-hosp-wrap"><div id="fx-hosp-top" style="display:contents"></div></div>
-          <button id="f-toggle">⚙ Filtros<span id="f-count" class="op-fcount" hidden></span></button>
-          <div class="seg-toggle" id="fx-mode"><button data-mode="jornada">🧭 Jornada</button><button data-mode="kanban">▦ Kanban</button></div>
+          <button id="f-toggle">${ic('sliders', 15)}Filtros<span id="f-count" class="op-fcount" hidden></span></button>
+          <div class="seg-toggle" id="fx-mode"><button data-mode="jornada">Jornada</button><button data-mode="kanban">Kanban</button></div>
           <div style="position:relative" id="fx-per-wrap">
-            <button id="fx-per-btn" class="per-btn" title="Escolher o período da Jornada">📅 <span id="fx-range"></span></button>
+            <button id="fx-per-btn" class="per-btn" title="Escolher o período da Jornada">${ic('calendar', 15)}<span id="fx-range"></span></button>
             <div class="per-pop" id="fx-per-pop" hidden></div>
           </div>
           <span style="flex:1"></span>
-          <button class="icon-a" id="fx-hot" title="🔥 Prioridades da semana — quem cobrar primeiro">🔥</button>
-          <button class="icon-a" id="fx-hoje" title="Hoje — o que preciso fazer" style="position:relative">☀️<span class="badge-dot" id="fx-hoje-n" hidden></span></button>
-          <button class="icon-a" id="fx-msg" title="Disparar cobranças / avisos">✉️</button>
-          <button class="icon-a" id="fx-export" title="Exportar os médicos filtrados (você escolhe as colunas)">⬇</button>
-          <button class="icon-a primary" id="fx-new" title="Novo médico">＋</button>
+          <button id="fx-hot" title="Prioridades da semana: quem cobrar primeiro">${ic('flame', 15)}Prioridades</button>
+          <button id="fx-msg" title="Disparar cobranças e avisos" aria-label="Disparar cobranças">${ic('mail', 15)}</button>
+          <button id="fx-export" title="Exportar os médicos filtrados (você escolhe as colunas)">${ic('download', 15)}Exportar</button>
+          <button class="btn-new" id="fx-new">${ic('plus', 15)}Novo médico</button>
         </div>
+        <div class="op-kpirow" id="fx-kpis"></div>
         <div class="op-filters" id="fx-chip" hidden></div>
         <div class="op-filters-more" id="fx-more"></div>
       </div>
@@ -114,7 +113,6 @@ function renderFluxo() {
     $('#fx-per-btn').onclick = (e) => { e.stopPropagation(); const p = $('#fx-per-pop'); p.hidden = !p.hidden; if (!p.hidden) renderPerPop(); };
     document.addEventListener('click', (e) => { const p = $('#fx-per-pop'); if (p && !p.hidden && !e.target.closest('#fx-per-wrap')) p.hidden = true; });
     $('#fx-msg').onclick = () => openMessages();
-    $('#fx-hoje').onclick = () => openHoje();
     $('#fx-new').onclick = () => openNewDoctor();
     $('#fx-export').onclick = exportDialog;
     $('#fx-hot').onclick = openPrioridades;
@@ -152,18 +150,18 @@ function renderKpis() {
   const pct = open.length ? Math.round(((open.length - venc) / open.length) * 100) : 100;
   const n = filteredDoctors().length;
   const mine = nextCounts(true), team = nextCounts(false);
-  const hb = $('#fx-hoje-n'); if (hb) { hb.hidden = !(mine.late + mine.hoje); hb.textContent = mine.late + mine.hoje; }
+  ['#fx-hoje-n', '#rail-hoje-n'].forEach((sel) => { const hb = $(sel); if (hb) { hb.hidden = !(mine.late + mine.hoje); hb.textContent = mine.late + mine.hoje; } });
   $('#fx-kpis').innerHTML = `
-    <span class="op-kpi"><b>${all.length}</b> cadastros</span>
-    <span class="op-kpi"><b>${open.length}</b> em andamento</span>
-    <span class="op-kpi clk ${F.stage === 'aprovado' ? 'on' : ''}" data-k="aprovado"><b>${all.filter((d) => d.stage === 'aprovado').length}</b> aprovados</span>
-    <span class="op-kpi clk ${F.stage === 'documentacao_pendente' ? 'on' : ''}" data-k="docpend"><b>${all.filter((d) => d.stage === 'documentacao_pendente').length}</b> doc. pendente</span>
-    <span class="op-kpi clk bad ${F.slaVencido ? 'on' : ''}" data-k="sla"><b>${venc}</b> SLA vencido</span>
-    <span class="op-kpi clk bad ${F.priority === 'urgente' ? 'on' : ''}" data-k="urg"><b>${all.filter((d) => d.priority === 'urgente' && !FINAL_STAGES.includes(d.stage)).length}</b> urgentes</span>
-    <span class="op-kpi"><b>${pct}%</b> SLA cumprido</span>
-    <span class="op-kpi clk bad ${F.next === 'ate_hoje' && F.resp === 'me' ? 'on' : ''}" data-k="minhas" title="Minhas ações de hoje e atrasadas"><b>${mine.late + mine.hoje}</b> minhas ações p/ hoje</span>
-    <span class="op-kpi clk ${F.next === 'sem' ? 'on' : ''}" data-k="semacao" style="background:var(--amber-soft)" title="Médicos em andamento sem próxima ação definida"><b style="color:var(--amber-ink)">⚠ ${team.sem}</b> sem próxima ação</span>
-    <span class="op-kpi" style="${n !== all.length ? 'background:var(--amber-soft)' : ''}">exibindo <b style="${n !== all.length ? 'color:var(--amber-ink)' : ''}">${n}</b></span>`;
+    <span class="op-kpi ${n !== all.length ? 'warn' : ''}">Exibindo <b>${n}</b></span>
+    <span class="op-kpi clk ${F.next === 'ate_hoje' && F.resp === 'me' ? 'on' : ''}" data-k="minhas" title="Minhas ações de hoje e atrasadas">Minhas ações para hoje <b>${mine.late + mine.hoje}</b></span>
+    <span class="op-kpi">Em andamento <b>${open.length}</b></span>
+    <span class="op-kpi clk ${F.stage === 'aprovado' ? 'on' : ''}" data-k="aprovado">Aprovados <b>${all.filter((d) => d.stage === 'aprovado').length}</b></span>
+    <span class="op-kpi clk ${F.stage === 'documentacao_pendente' ? 'on' : ''}" data-k="docpend">Doc. pendente <b>${all.filter((d) => d.stage === 'documentacao_pendente').length}</b></span>
+    <span class="op-kpi clk bad ${F.slaVencido ? 'on' : ''}" data-k="sla">SLA vencido <b>${venc}</b></span>
+    <span class="op-kpi clk bad ${F.priority === 'urgente' ? 'on' : ''}" data-k="urg">Urgentes <b>${all.filter((d) => d.priority === 'urgente' && !FINAL_STAGES.includes(d.stage)).length}</b></span>
+    <span class="op-kpi clk ${team.sem ? 'warn' : ''} ${F.next === 'sem' ? 'on' : ''}" data-k="semacao" title="Médicos em andamento sem próxima ação definida">Sem próxima ação <b>${team.sem}</b></span>
+    <span class="op-kpi dim">SLA cumprido <b>${pct}%</b></span>
+    <span class="op-kpi dim">Cadastros <b>${all.length}</b></span>`;
   $$('#fx-kpis [data-k]').forEach((k) => k.onclick = () => {
     const v = k.dataset.k;
     if (v === 'aprovado') F.stage = F.stage === 'aprovado' ? '' : 'aprovado';
@@ -255,7 +253,7 @@ function exportDialog() {
   sel = new Set(sel || ['name', 'hospital', 'setores', 'crm', 'whatsapp', 'stage', 'sla', 'acao', 'acao_data', 'acao_resp', 'docs']);
   const n = filteredDoctors().length;
   const m = openModal(`
-    <div class="modal-head"><div><h2>⬇ Exportar médicos</h2><div class="om-sub">${n} médico(s) do filtro atual · escolha as colunas</div></div><button class="x" data-close>✕</button></div>
+    <div class="modal-head"><div><h2>Exportar médicos</h2><div class="om-sub">${n} médico(s) do filtro atual · escolha as colunas</div></div><button class="x" data-close>✕</button></div>
     <div class="modal-body"><div class="checks" id="ex-cols">${EXPORT_COLS.map(([k, l]) => `<label class="${sel.has(k) ? 'on' : ''}"><input type="checkbox" value="${k}" ${sel.has(k) ? 'checked' : ''}> ${esc(l)}</label>`).join('')}</div>
       <div class="actions-row"><button class="btn-ghost" id="ex-all">Marcar todas</button><button class="btn-ghost" id="ex-none">Desmarcar todas</button></div></div>
     <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-line" id="ex-csv">CSV</button><button class="btn btn-primary" id="ex-xlsx">Excel (.xlsx)</button></div>`);
@@ -300,11 +298,11 @@ function openPrioridades() {
     return { d, sc, why };
   }).filter((r) => r.sc > 0).sort((a, b) => b.sc - a.sc).slice(0, 40);
   const m = openModal(`
-    <div class="modal-head"><div><h2>🔥 Prioridades da semana</h2><div class="om-sub">Lista calculada automaticamente — quem cobrar primeiro (urgência, SLA, ações atrasadas e quem está quase pronto).</div></div><button class="x" data-close>✕</button></div>
+    <div class="modal-head"><div><h2>Prioridades da semana</h2><div class="om-sub">Lista calculada automaticamente — quem cobrar primeiro (urgência, SLA, ações atrasadas e quem está quase pronto).</div></div><button class="x" data-close>✕</button></div>
     <div class="modal-body"><table class="t"><thead><tr><th>#</th><th>Médico</th><th>Pontos</th><th>Por quê</th><th>Próxima ação</th><th></th></tr></thead><tbody>
       ${rows.map((r, i) => `<tr><td>${i + 1}</td><td><a href="#" data-openp="${r.d.id}" style="color:var(--brand);font-weight:600">${esc(r.d.name)}</a><br><small class="muted">${esc(r.d.hospital)} · ${esc(stageLabel(r.d.stage))}</small></td>
         <td><b>${r.sc}</b></td><td><small>${r.why.map(esc).join(' · ')}</small></td><td><small>${r.d.proxima_acao ? esc(r.d.proxima_acao) + ' ' + fmtYmd(r.d.proxima_data) : '—'}</small></td>
-        <td><button class="btn btn-line btn-sm" data-ch="${r.d.id}">Cobrar hoje</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Nada crítico agora. 👍</td></tr>'}
+        <td><button class="btn btn-line btn-sm" data-ch="${r.d.id}">Cobrar hoje</button></td></tr>`).join('') || '<tr><td colspan="6" class="empty">Nada crítico agora.</td></tr>'}
     </tbody></table></div>`, { size: 'lg', onClose: () => refreshFluxo() });
   const byId = (id) => S.doctors.find((x) => x.id === id);
   $$('[data-openp]', m.el).forEach((a) => a.onclick = (e) => { e.preventDefault(); m.close(); openDoctor(byId(a.dataset.openp)); });
@@ -515,7 +513,7 @@ function renderJornada(list) {
     <div class="op-sumrow"><div class="op-left" id="fx-closed" title="Aprovado ou reprovado encerra o credenciamento — por isso ficam fora da tela" style="color:var(--ink-faint)">✔ Encerrados antes: ${nApr} aprov. · ${nRep} reprov.<span class="btn-ghost" style="margin-left:auto;padding:0">${FX.showDone ? 'ocultar' : 'mostrar'}</span></div><div class="op-right"></div></div></div>`;
 
   const countRow = `<div class="op-row op-countrow"><div class="op-left">${rows.length} de ${list.length} médicos
-      <select id="fx-sort" style="margin-left:auto;border:none;background:transparent;font:inherit;color:inherit;text-transform:uppercase;cursor:pointer">
+      <select id="fx-sort" style="margin-left:auto;border:none;background:transparent;font:inherit;color:inherit;font-weight:500;cursor:pointer">
         <option value="sla" ${FX.sort === 'sla' ? 'selected' : ''}>SLA mais crítico</option><option value="dias" ${FX.sort === 'dias' ? 'selected' : ''}>Mais dias no fluxo</option><option value="nome" ${FX.sort === 'nome' ? 'selected' : ''}>Nome</option></select></div>
     <div class="op-right" style="min-height:30px"></div></div>`;
 
@@ -577,7 +575,7 @@ function cardHtml(d) {
     <div class="top"><span class="sdot s-${sla ? sla.status : 'none'}"></span><span class="nm" title="${esc(d.name)}">${esc(d.name)}</span>${d.priority === 'urgente' ? '<span class="tagx bad">URG</span>' : d.priority === 'hospital_novo' ? '<span class="tagx warn">3h</span>' : ''}</div>
     <div class="kgrid"><span title="${esc((d.setores || []).join(', '))}">${esc((d.setores || []).join(', ') || '—')}</span><span title="${esc(d.hospital)}">${esc(d.hospital)}</span><span>${esc(d.crm || '—')}</span><span>${esc(d.whatsapp || '—')}</span></div>
     <div class="tags">${d.status_especialidade ? `<span class="tag">${esc(d.status_especialidade)}</span>` : ''}${d.disc ? `<span class="tag ${DISC_CLASS[d.disc]}">${esc(DISC_LABEL[d.disc])}</span>` : ''}${t(d.link_enviado, 'Link')}${t(d.app, 'APP')}${t(d.procuracao, 'Proc.')}</div>
-    ${d.doc_pendente ? `<div class="pend" title="${esc(d.doc_pendente)}">📄 ${esc(d.doc_pendente)}</div>` : ''}
+    ${d.doc_pendente ? `<div class="pend" title="${esc(d.doc_pendente)}">${esc(d.doc_pendente)}</div>` : ''}
     ${isOpen(d) ? `<div class="small" style="margin-bottom:5px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${nextInline(d).replace(/^ · /, '')}</div>` : ''}
     <div class="foot"><span class="prog"><i style="width:${prog}%;background:${prog >= 100 ? 'var(--green)' : prog >= 50 ? '#e0a94f' : 'var(--ink-faint)'}"></i></span>${prog}%
       <span>${fmtDate(d.entry_date)}</span>${sla ? `<span class="slapill ${sla.status}">${fmtRemaining(sla.remaining)}</span>` : ''}</div>
@@ -601,7 +599,7 @@ function renderBoard(list) {
       <div class="kanban-col-head" ${S.isAdmin ? 'draggable="true"' : ''} data-colhead="${s.id}">
         ${S.isAdmin ? '<span class="grip" title="Arraste para reordenar">⋮⋮</span>' : ''}
         <span class="cdot" style="background:${esc(s.color)}"></span><span class="lbl2">${esc(s.label)}</span><span class="cnt">${items.length}</span>
-        ${S.isAdmin && s.is_custom ? `<button class="del" data-delcol="${s.id}" title="Excluir coluna">🗑</button>` : ''}
+        ${S.isAdmin && s.is_custom ? `<button class="del" data-delcol="${s.id}" title="Excluir coluna" aria-label="Excluir coluna">${ic('trash', 13)}</button>` : ''}
       </div>
       <div class="kanban-col-body">${items.slice(0, lim).map(cardHtml).join('') || '<div class="empty">Nenhum médico</div>'}
         ${items.length > lim ? `<button class="more-btn" data-more="${s.id}">Mostrar mais ${items.length - lim} médico(s)</button>` : ''}
@@ -737,7 +735,7 @@ function renderIndicadores() {
   const byHosp = count(open, (d) => d.hospital).slice(0, 10).map(([l, v]) => ({ l, v, go: { hospitals: [l] }, txt: `${v} (${open.filter((d) => d.hospital === l && doctorSla(d).status === 'urgent').length} venc.)` }));
   const hospitals = uniq(S.doctors.map((d) => d.hospital)).sort();
   root.innerHTML = `
-    <div class="pg-head"><h2>📊 Indicadores</h2><span class="sub">Funil do credenciamento, SLA e onde estão os gargalos.</span>
+    <div class="pg-head"><h2>Indicadores</h2><span class="sub">Funil do credenciamento, SLA e onde estão os gargalos.</span>
       <span class="right"><select class="inp" id="ind-h" style="width:260px"><option value="">Todos os hospitais</option>${hospitals.map((h) => `<option ${IND.hospital === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></span></div>
     <div class="kpis">
       <div class="kpi"><span class="l">Cadastros</span><span class="v">${total}</span><span class="s">${open.length} em andamento</span></div>

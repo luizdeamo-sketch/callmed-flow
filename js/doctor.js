@@ -184,11 +184,11 @@ function drawMedico() {
         <button class="ptag ${d.priority === 'urgente' ? 'bad' : d.priority === 'hospital_novo' ? 'warn' : ''}" id="pv-prio" style="cursor:pointer" title="Clique para alternar urgência">${PRIORITIES[d.priority] || d.priority}</button>
       </div>
       <div class="person-actions">
-        <button class="btn btn-line" id="pa-edit">✏️ Editar cadastro</button>
-        ${d.whatsapp ? '<button class="btn btn-line" id="pa-wa">💬 WhatsApp</button>' : ''}
-        <button class="btn btn-line" id="pa-msg">✉️ Enviar cobrança</button>
+        <button class="btn btn-line" id="pa-edit">${ic('edit', 15)}Editar cadastro</button>
+        ${d.whatsapp ? `<button class="btn btn-line" id="pa-wa">${ic('chat', 15)}WhatsApp</button>` : ''}
+        <button class="btn btn-line" id="pa-msg">${ic('mail', 15)}Enviar cobrança</button>
         <button class="btn btn-line" id="pa-copy">⧉ Replicar para outro hospital</button>
-        ${S.isAdmin ? '<button class="btn btn-line" id="pa-del" style="color:var(--red)">🗑 Excluir</button>' : ''}
+        ${S.isAdmin ? `<button class="btn btn-line" id="pa-del" style="color:var(--red)">${ic('trash', 15)}Excluir</button>` : ''}
       </div>
       <div class="pv-next ${nextCls}">
         <div><b>Etapa atual:</b> <span class="op-dot" style="display:inline-block;background:${esc(st?.color || '#999')};margin:0 4px"></span>${esc(st?.label || d.stage)} · há ${diasEtapa} dia(s)
@@ -241,7 +241,7 @@ function drawResumoTab(body, d) {
   const yn = (b) => (b ? 'Sim' : 'Não');
   const diasFluxo = Math.floor((Date.now() - new Date(d.entry_date)) / 864e5) + 1;
   const contatos = PV.acts.filter((a) => a.type === 'contact' || a.type === 'cobranca').length;
-  const wa = d.whatsapp ? `${esc(d.whatsapp)} <a href="${waLink(d.whatsapp, '')}" target="_blank" rel="noopener" title="Abrir WhatsApp">💬</a>` : '';
+  const wa = d.whatsapp ? `${esc(d.whatsapp)} <a href="${waLink(d.whatsapp, '')}" target="_blank" rel="noopener" title="Abrir WhatsApp" aria-label="Abrir WhatsApp">${ic('chat', 14)}</a>` : '';
   body.innerHTML = `
     <div class="activity-strip" style="margin:0 0 14px">
       <div class="astat"><span class="an">${diasFluxo}</span><span class="al">Dias no fluxo</span></div>
@@ -251,7 +251,7 @@ function drawResumoTab(body, d) {
       <div class="astat"><span class="an">${fmtDate(d.entry_date)}</span><span class="al">Entrada</span></div>
       ${d.created_by && S.profiles[d.created_by] ? `<div class="astat"><span class="an" style="font-size:1rem">${esc(S.profiles[d.created_by].display_name)}</span><span class="al">Cadastrado por${S.profiles[d.created_by].setor ? ' · ' + esc(SETOR_USUARIO[S.profiles[d.created_by].setor] || S.profiles[d.created_by].setor) : ''}</span></div>` : ''}
     </div>
-    ${d.doc_pendente ? `<div class="es-box" style="background:var(--amber-soft);border-color:var(--amber-line)"><div class="ql" style="color:var(--amber-ink)">📄 Documento pendente</div>${esc(d.doc_pendente)}</div>` : ''}
+    ${d.doc_pendente ? `<div class="es-box" style="background:var(--amber-soft);border-color:var(--amber-line)"><div class="ql" style="color:var(--amber-ink)">${ic('doc', 14)} Documento pendente</div>${esc(d.doc_pendente)}</div>` : ''}
     <div class="pv-grid">
       <div class="es-box"><div class="ql">Dados do médico</div><div class="core-fields">
         ${pvField('Nome', esc(d.name))}${pvField('CPF', esc(d.cpf), true)}${pvField('CRM', esc(d.crm), true)}${pvField('UF', esc(d.estado))}
@@ -275,7 +275,7 @@ function otherHospitals(d) {
 }
 
 function drawHistTab(body, d) {
-  const ICON = { stage_change: '➡️', note: '📝', doc: '📄', contact: '💬', cobranca: '✉️', admin: '⚙️', acao: '⏰' };
+  const ICON = { stage_change: ic('arrow', 14), note: ic('note', 14), doc: ic('doc', 14), contact: ic('chat', 14), cobranca: ic('mail', 14), admin: ic('gear', 14), acao: ic('clock', 14) };
   body.innerHTML = `
     <div class="es-box"><div class="ql">Registrar atividade</div>
       <div style="display:flex;gap:6px"><input class="inp" id="pv-note" placeholder="Nota, ligação, retorno do hospital..."><button class="btn btn-primary btn-sm" id="pv-note-ok">Registrar</button></div></div>

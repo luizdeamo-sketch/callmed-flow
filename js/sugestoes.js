@@ -30,7 +30,7 @@ function namePasted(items) {
   });
 }
 function fileChips(files) {
-  return files.map((f, i) => `<div class="sg-fchip">${/^image\//.test(f.type) ? `<img src="${URL.createObjectURL(f)}" alt="">` : '<span>📄</span>'}<span class="nm">${esc(f.name)}</span><button data-rm="${i}" title="Remover">✕</button></div>`).join('');
+  return files.map((f, i) => `<div class="sg-fchip">${/^image\//.test(f.type) ? `<img src="${URL.createObjectURL(f)}" alt="">` : ic('doc', 18)}<span class="nm">${esc(f.name)}</span><button data-rm="${i}" title="Remover">✕</button></div>`).join('');
 }
 
 // ---------- tela ----------
@@ -39,14 +39,14 @@ function renderSugestoes() {
   if (!root.dataset.built) {
     root.dataset.built = '1';
     root.innerHTML = `
-      <div class="pg-head"><h2>💡 Sugestões de melhoria</h2><span class="sub">Ideias, problemas e pedidos para o sistema. Tudo fica registrado no histórico.</span></div>
+      <div class="pg-head"><h2>Sugestões de melhoria</h2><span class="sub">Ideias, problemas e pedidos para o sistema. Tudo fica registrado no histórico.</span></div>
       <div class="es-box">
         <div class="sg-row" style="margin-bottom:8px"><span class="ql" style="margin:0">Registrando como</span><b>${esc(actorName())}</b></div>
-        <textarea id="sg-text" rows="4" placeholder="Escreva livremente, ou clique em 🎤 e narre a sua ideia. Dá para colar um print (Ctrl+V) ou arrastar arquivos para cá."></textarea>
+        <textarea id="sg-text" rows="4" placeholder="Escreva livremente, ou clique em Gravar e narre a sua ideia. Dá para colar um print (Ctrl+V) ou arrastar arquivos para cá."></textarea>
         <div id="sg-files" class="sg-files"></div>
         <div class="sg-row" style="margin-top:8px">
-          <button id="sg-mic" class="btn btn-line btn-sm">🎤 Gravar / ditar</button>
-          <button id="sg-attach" class="btn btn-line btn-sm">📎 Anexar print / PDF / arquivo</button><input type="file" id="sg-file" multiple hidden>
+          <button id="sg-mic" class="btn btn-line btn-sm">${ic('mic', 14)}Gravar / ditar</button>
+          <button id="sg-attach" class="btn btn-line btn-sm">${ic('clip', 14)}Anexar print, PDF ou arquivo</button><input type="file" id="sg-file" multiple hidden>
           <span id="sg-mic-st" style="font-size:12px;color:var(--red)"></span>
           <select id="sg-tipo">${Object.entries(SG_TIPOS).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select>
           <select id="sg-tela"><option value="">Em qual tela? (opcional)</option>${SG_TELAS.map((t) => `<option>${esc(t)}</option>`).join('')}</select>
@@ -162,7 +162,7 @@ async function sgMicToggle() {
     SG.recording = false;
     try { SG.rec && SG.rec.stop(); } catch (_) { /* já parado */ }
     try { if (SG.media && SG.media.state !== 'inactive') SG.media.stop(); } catch (_) { /* já parado */ }
-    btn.textContent = '🎤 Gravar / ditar'; btn.classList.remove('rec'); st.textContent = '';
+    btn.innerHTML = ic('mic', 14) + 'Gravar / ditar'; btn.classList.remove('rec'); st.textContent = '';
     return;
   }
   if (!SG_SR) { toast('Este navegador não faz ditado por voz. Use o Chrome ou o Edge.', 'err'); return; }
@@ -196,7 +196,7 @@ async function sgMicToggle() {
   rec.onend = () => { if (SG.recording) { try { rec.start(); } catch (_) { /* reinício */ } } };
   rec.start();
   SG.recording = true;
-  btn.textContent = '⏹ Parar'; btn.classList.add('rec'); st.textContent = '🔴 ouvindo... fale e depois clique em Parar';
+  btn.textContent = 'Parar'; btn.classList.add('rec'); st.textContent = '🔴 ouvindo... fale e depois clique em Parar';
 }
 
 async function sgSend() {
@@ -240,7 +240,7 @@ function sgStatusDialog(r) {
       <div class="field"><label>Resposta / nota (visível para quem sugeriu)</label><textarea class="inp" id="sgd-note" rows="4"></textarea></div>
       <label class="small" style="display:flex;gap:6px;align-items:center;margin:-4px 0 12px"><input type="checkbox" id="sgd-wait"> 💬 Preciso de um retorno de ${esc((r.autor || '').split(' ')[0] || 'quem sugeriu')} (destaca em vermelho)</label>
       <div class="field"><label>Anexar print(s) ou arquivo(s) — opcional</label>
-        <div class="dz" id="sgd-dz">📎 Arraste, cole (Ctrl+V) ou clique para anexar<input type="file" id="sgd-file" multiple accept=".pdf,image/*" hidden></div>
+        <div class="dz" id="sgd-dz">Arraste, cole (Ctrl+V) ou clique para anexar<input type="file" id="sgd-file" multiple accept=".pdf,image/*" hidden></div>
         <div id="sgd-files" class="sg-files"></div></div>
     </div>
     <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="sgd-save">Salvar</button></div>`);
