@@ -440,3 +440,24 @@ returns uuid language sql stable security definer set search_path = public, auth
 $$;
 revoke execute on function public.flow_auth_user_id_by_email(text) from public, anon, authenticated;
 grant execute on function public.flow_auth_user_id_by_email(text) to service_role;
+
+-- ---------- migração 9 (15/10/2026): fluxo simplificado ----------
+-- 10 etapas viram 8 (6 de trabalho + Aprovado/Reprovado); urgência passa a valer por 7 dias.
+alter table public.flow_doctors add column if not exists urgente_ate date;
+update public.flow_doctors set priority = 'rotina', urgente_ate = null where priority = 'urgente' and stage in ('aprovado','reprovado');
+update public.flow_doctors set urgente_ate = current_date + 7 where priority = 'urgente' and urgente_ate is null;
+update public.flow_doctors set stage = 'aguardando_juridico' where stage = 'enviar_documentos_juridico';
+update public.flow_doctors set stage = 'aguardando_hospital' where stage = 'documentacao_recebida';
+delete from public.flow_stages where id in ('enviar_documentos_juridico','documentacao_recebida');
+update public.flow_stages set id = 'em_espera' where id = 'r3';  -- on update cascade leva os médicos junto
+update public.flow_stages s set label = v.label, position = v.pos, sla_hours = v.sla, color = v.color
+  from (values ('aguardando_contato','Primeiro contato',0,24,'#8b8fa3'),
+               ('aguardando_medico','Aguardando médico',1,24,'#c98a1b'),
+               ('aguardando_juridico','Jurídico',2,24,'#7c6fd0'),
+               ('documentacao_pendente','Documentação',3,24,'#d9822b'),
+               ('aguardando_hospital','Hospital',4,48,'#3463e0'),
+               ('em_espera','Em espera',5,9999,'#9a9aa5'),
+               ('aprovado','Aprovado',6,9999,'#1f9d6b'),
+               ('reprovado','Reprovado',7,9999,'#d0443a')) as v(id,label,pos,sla,color)
+ where s.id = v.id;
+update public.flow_doctors d set sla_hours = s.sla_hours from public.flow_stages s where s.id = d.stage and d.sla_hours <> s.sla_hours;

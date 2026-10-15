@@ -3,19 +3,17 @@
 
 const ACOES = [
   'Fazer primeiro contato', 'Cobrar retorno do médico', 'Cobrar documentação pendente', 'Conferir documentos recebidos',
-  'Cobrar documentação de R3', 'Enviar documentos ao jurídico', 'Cobrar retorno do jurídico', 'Enviar cadastro ao hospital (e-mail)',
+  'Verificar se já pode seguir', 'Enviar documentos ao jurídico', 'Cobrar retorno do jurídico', 'Enviar cadastro ao hospital (e-mail)',
   'Cobrar retorno do hospital', 'Enviar link / APP', 'Coletar procuração', 'Informar resultado ao médico', 'Outra',
 ];
 /** Ação sugerida automaticamente quando o médico entra em cada etapa. */
 const ACAO_POR_ETAPA = {
   aguardando_contato: 'Fazer primeiro contato',
   aguardando_medico: 'Cobrar retorno do médico',
-  enviar_documentos_juridico: 'Enviar documentos ao jurídico',
-  r3: 'Cobrar documentação de R3',
-  aguardando_juridico: 'Cobrar retorno do jurídico',
+  aguardando_juridico: 'Enviar documentos ao jurídico',
   documentacao_pendente: 'Cobrar documentação pendente',
-  documentacao_recebida: 'Enviar cadastro ao hospital (e-mail)',
-  aguardando_hospital: 'Cobrar retorno do hospital',
+  aguardando_hospital: 'Enviar cadastro ao hospital (e-mail)',
+  em_espera: 'Verificar se já pode seguir',
 };
 
 // ---------- datas ----------
@@ -151,14 +149,24 @@ function bindNextStrip(d, redraw) {
 
 // ---------- painel Hoje ----------
 const HJ = { onlyMine: true };
-async function openHoje() {
-  const m = openModal(`
-    <div class="modal-head"><div><h2>Hoje</h2><div class="om-sub">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</div></div><button class="x" data-close>✕</button></div>
-    <div class="modal-body" id="hj-body"><div class="op-more">Carregando...</div></div>`, { size: 'lg', onClose: () => { if (currentView === 'fluxo') refreshFluxo(); } });
+function openHoje() { go('hoje'); }
+VIEWS.hoje = renderHoje;
+function renderHoje() {
+  const root = $('#view-hoje');
+  const h = new Date().getHours();
+  const nome = (S.profile.display_name || '').split(' ')[0];
+  root.innerHTML = `<div class="hj-page">
+    <div class="pg-head"><div><div class="sub" style="margin-bottom:2px">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</div>
+      <h2 style="font-size:1.5rem">${h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'}${nome ? ', ' + esc(nome) : ''}</h2></div>
+      <div class="right"><button class="btn btn-primary" id="hj-new">${ic('plus', 15)}Novo médico</button></div></div>
+    <div id="hj-body"><div class="op-more">Carregando...</div></div></div>`;
+  $('#hj-new', root).onclick = () => openNewDoctor();
+  const m = { el: root, close() {} };
   const draw = async () => {
     const body = $('#hj-body', m.el);
-    const { data: tarefas } = await sb.from('flow_tarefas').select('*').or(`data.eq.${ymdToday()},and(concluida.eq.false,data.lt.${ymdToday()})`).order('created_at');
+    if (!body) return;
     const me = S.user.id;
+    { const mc = nextCounts(true); const hb = $('#rail-hoje-n'); if (hb) { hb.hidden = !(mc.late + mc.hoje); hb.textContent = mc.late + mc.hoje; } }
     const open = S.doctors.filter(isOpen);
     const acoes = open.filter((d) => d.proxima_acao && daysTo(d.proxima_data) !== null && daysTo(d.proxima_data) <= 0 && (!HJ.onlyMine || d.proximo_responsavel_id === me))
       .sort((a, b) => String(a.proxima_data).localeCompare(String(b.proxima_data)));
@@ -168,7 +176,6 @@ async function openHoje() {
     const encerradosHoje = S.doctors.filter((d) => FINAL_STAGES.includes(d.stage) && new Date(d.stage_entered_at) >= t0);
     const encaminhados = open.filter((d) => d.created_by === me && d.proximo_responsavel_id && d.proximo_responsavel_id !== me)
       .sort((a, b) => new Date(b.entry_date) - new Date(a.entry_date));
-    const tars = (tarefas || []).filter((t) => !HJ.onlyMine || t.responsavel_id === me || t.created_by === me);
     const row = (d, right, sub) => `<div class="hj-row"><a href="#" data-openp="${d.id}">${esc(d.name)}</a> <small class="muted">· ${esc(d.hospital)}${sub ? ' · ' + sub : ''}</small><span class="hj-right">${right || ''}</span></div>`;
     const sec = (title, cnt, html, hint) => `<div class="es-box"><div class="ql">${title} <span class="tagx" style="margin-left:6px">${cnt}</span>${hint ? `<span class="hint" style="margin:0 0 0 8px;text-transform:none;letter-spacing:0;font-family:inherit;font-weight:400">${hint}</span>` : ''}</div>${html || '<div class="hint" style="margin:0">Nada por aqui.</div>'}</div>`;
     body.innerHTML = `
@@ -186,18 +193,13 @@ async function openHoje() {
           <div class="hj-act">→ <b>${esc(d.proxima_acao)}</b>${HJ.onlyMine ? '' : ' · ' + esc(respName(d.proximo_responsavel_id))} ${n < 0 ? `<span class="tagx bad">atrasada ${-n}d</span>` : '<span class="tagx warn">hoje</span>'}
           <span class="hj-right">${d.whatsapp ? `<a class="btn btn-line btn-sm" href="${waLink(d.whatsapp, '')}" target="_blank" rel="noopener" data-wa="${d.id}" aria-label="WhatsApp">${ic('chat', 14)}</a>` : ''}<button class="btn btn-dark btn-sm" data-done="${d.id}">${ic('check', 14)}Feito</button><button class="btn btn-line btn-sm" data-adiar="${d.id}" title="Adiar para o próximo dia útil">Amanhã</button></span></div></div>`;
       }).join(''))}
+      ${encaminhados.length ? sec('Cadastros que encaminhei (em andamento)', encaminhados.length, encaminhados.slice(0, 40).map((d) => row(d, `<span class="tagx mute">${esc(respName(d.proximo_responsavel_id))}</span>`, `${esc(stageLabel(d.stage))} · há ${Math.floor((Date.now() - new Date(d.entry_date)) / 864e5)}d`)).join(''), 'para acompanhar sem precisar cobrar') : ''}
       ${sec('SLA vencendo (últimas horas do prazo)', slaHoje.length, slaHoje.slice(0, 40).map((d) => row(d, `<span class="slapill warning">${fmtRemaining(doctorSla(d).remaining)}</span>`, esc(stageLabel(d.stage)))).join(''), 'mova de etapa antes que vença')}
       ${HJ.onlyMine ? '' : sec('Em andamento sem próxima ação', semAcao.length, semAcao.slice(0, 40).map((d) => row(d, `<button class="btn btn-line btn-sm" data-def="${d.id}">Definir</button>`, esc(stageLabel(d.stage)))).join('') + (semAcao.length > 40 ? `<div class="hint">+${semAcao.length - 40} outros — use a pílula “sem próxima ação” no Fluxo.</div>` : ''))}
-      ${encaminhados.length ? sec('Cadastros que encaminhei (em andamento)', encaminhados.length, encaminhados.slice(0, 40).map((d) => row(d, `<span class="tagx mute">${esc(respName(d.proximo_responsavel_id))}</span>`, `${esc(stageLabel(d.stage))} · há ${Math.floor((Date.now() - new Date(d.entry_date)) / 864e5)}d`)).join(''), 'para acompanhar sem precisar cobrar') : ''}
       ${sec('Encerrados hoje', encerradosHoje.length, encerradosHoje.map((d) => row(d, `<span class="tagx ${d.stage === 'aprovado' ? 'ok' : 'bad'}">${esc(stageLabel(d.stage))}</span>`)).join(''))}
-      <div class="es-box"><div class="ql">Tarefas avulsas</div>
-        ${tars.map((t) => `<div class="hj-row"><label class="small" style="display:flex;gap:8px;align-items:center;flex:1"><input type="checkbox" data-task="${t.id}" ${t.concluida ? 'checked' : ''}> <span style="${t.concluida ? 'text-decoration:line-through;color:var(--ink-faint)' : ''}">${esc(t.descricao)}</span>
-          ${t.data < ymdToday() ? `<span class="tagx bad">de ${fmtYmd(t.data)}</span>` : ''}${HJ.onlyMine ? '' : `<small class="muted">· ${esc(respName(t.responsavel_id))}</small>`}</label>
-          ${t.created_by === me || S.isAdmin ? `<button class="btn-ghost" data-deltask="${t.id}" style="color:var(--ink-faint)">✕</button>` : ''}</div>`).join('') || '<div class="hint" style="margin:0">Nenhuma tarefa.</div>'}
-        <div class="sg-row" style="margin-top:8px"><input class="inp" id="hj-task-new" placeholder="Nova tarefa (não precisa ter médico vinculado)..." style="flex:1"><button class="btn btn-primary btn-sm" id="hj-task-add">+ Tarefa</button></div>
-        <div class="hint">Tarefas não concluídas de dias anteriores continuam aparecendo aqui até serem marcadas.</div></div>`;
+`;
     const byId = (id) => S.doctors.find((x) => x.id === id);
-    $$('[data-openp]', body).forEach((a) => a.onclick = (e) => { e.preventDefault(); m.close(); openDoctor(byId(a.dataset.openp)); });
+    $$('[data-openp]', body).forEach((a) => a.onclick = (e) => { e.preventDefault(); openDoctor(byId(a.dataset.openp)); });
     $$('#hj-mine button', body).forEach((b) => b.onclick = () => { HJ.onlyMine = b.dataset.m === '1'; draw(); });
     $$('[data-done]', body).forEach((b) => b.onclick = () => nextActionDialog(byId(b.dataset.done), { concluir: true, onDone: draw }));
     $$('[data-def]', body).forEach((b) => b.onclick = () => nextActionDialog(byId(b.dataset.def), { onDone: draw }));
@@ -208,17 +210,6 @@ async function openHoje() {
     $$('[data-wa]', body).forEach((a) => a.addEventListener('click', () => {
       sb.from('flow_activities').insert({ doctor_id: a.dataset.wa, type: 'contact', description: 'WhatsApp aberto pelo painel Hoje' }).then();
     }));
-    $$('[data-task]', body).forEach((c) => c.onchange = async () => { await sb.from('flow_tarefas').update({ concluida: c.checked }).eq('id', c.dataset.task); draw(); });
-    $$('[data-deltask]', body).forEach((b) => b.onclick = async () => { await sb.from('flow_tarefas').delete().eq('id', b.dataset.deltask); draw(); });
-    const add = async () => {
-      const v = $('#hj-task-new', body).value.trim();
-      if (!v) return;
-      const { error } = await sb.from('flow_tarefas').insert({ descricao: v, data: ymdToday() });
-      if (error) return toast('Erro: ' + error.message, 'err');
-      draw();
-    };
-    $('#hj-task-add', body).onclick = add;
-    $('#hj-task-new', body).onkeydown = (e) => { if (e.key === 'Enter') add(); };
   };
   draw();
 }

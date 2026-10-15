@@ -111,7 +111,7 @@ function openNewDoctor() {
       name: sanitizeName($('#nd-name', el).value), whatsapp: $('#nd-wa', el).value.trim(), cpf: $('#nd-cpf', el).value.trim(),
       crm: crmNum ? `CRM/${uf} ${crmNum}` : '', estado: uf, setores: [...setorSel],
       status_especialidade: $('#nd-status', el).value, rqe: $('#nd-rqe', el).value.trim(), disc: $('#nd-disc', el).value,
-      priority: $('#nd-prio', el).value, medsimples: $('#nd-med', el).checked ? 'Sim' : '', procuracao: $('#nd-proc', el).checked,
+      priority: $('#nd-prio', el).value, urgente_ate: $('#nd-prio', el).value === 'urgente' ? urgenteAte() : null, medsimples: $('#nd-med', el).checked ? 'Sim' : '', procuracao: $('#nd-proc', el).checked,
       app: $('#nd-app', el).checked, observations: $('#nd-obs', el).value.trim(), stage: 'aguardando_contato',
       sla_hours: stageById('aguardando_contato')?.sla_hours ?? 24,
       proxima_acao: ACAO_POR_ETAPA.aguardando_contato, proxima_data: ymdToday(), proximo_responsavel_id: $('#nd-resp', el).value || S.user.id,
@@ -181,7 +181,7 @@ function drawMedico() {
         ${d.crm ? `<span class="ptag">${esc(d.crm)}</span>` : ''}
         ${(d.setores || []).map((s) => `<span class="ptag">${esc(s)}</span>`).join('')}
         ${d.status_especialidade ? `<span class="ptag">${esc(d.status_especialidade)}</span>` : ''}
-        <button class="ptag ${d.priority === 'urgente' ? 'bad' : d.priority === 'hospital_novo' ? 'warn' : ''}" id="pv-prio" style="cursor:pointer" title="Clique para alternar urgência">${PRIORITIES[d.priority] || d.priority}</button>
+        <button class="ptag ${d.priority === 'urgente' ? 'bad' : d.priority === 'hospital_novo' ? 'warn' : ''}" id="pv-prio" style="cursor:pointer" title="Clique para alternar urgência (vale por 7 dias)">${PRIORITIES[d.priority] || d.priority}${d.priority === 'urgente' && d.urgente_ate ? ' até ' + fmtYmd(d.urgente_ate) : ''}</button>
       </div>
       <div class="person-actions">
         <button class="btn btn-line" id="pa-edit">${ic('edit', 15)}Editar cadastro</button>
@@ -210,7 +210,7 @@ function drawMedico() {
   $$('.pv-tab', root).forEach((b) => b.onclick = () => { PV.tab = b.dataset.tab; drawMedico(); });
   $('#pv-prio').onclick = async () => {
     const np = d.priority === 'urgente' ? 'rotina' : 'urgente';
-    if (await updateDoctor(d, { priority: np }, `Prioridade alterada para ${PRIORITIES[np]}`)) { await loadDoctorDetail(); drawMedico(); }
+    if (await updateDoctor(d, { priority: np, urgente_ate: np === 'urgente' ? urgenteAte() : null }, np === 'urgente' ? `Marcado como urgente até ${fmtYmd(urgenteAte())}` : 'Prioridade alterada para Rotina')) { await loadDoctorDetail(); drawMedico(); }
   };
   bindNextStrip(d, async () => { await loadDoctorDetail(); drawMedico(); });
   $('#pa-edit').onclick = () => editDoctorDialog(d);
@@ -247,21 +247,22 @@ function drawResumoTab(body, d) {
       <div class="astat"><span class="an">${diasFluxo}</span><span class="al">Dias no fluxo</span></div>
       <div class="astat"><span class="an">${S.docProgress[d.id] || 0}%</span><span class="al">Documentos</span></div>
       <div class="astat"><span class="an">${contatos}</span><span class="al">Contatos / cobranças</span></div>
-      <div class="astat"><span class="an">${PV.acts.length}</span><span class="al">Registros no histórico</span></div>
-      <div class="astat"><span class="an">${fmtDate(d.entry_date)}</span><span class="al">Entrada</span></div>
       ${d.created_by && S.profiles[d.created_by] ? `<div class="astat"><span class="an" style="font-size:1rem">${esc(S.profiles[d.created_by].display_name)}</span><span class="al">Cadastrado por${S.profiles[d.created_by].setor ? ' · ' + esc(SETOR_USUARIO[S.profiles[d.created_by].setor] || S.profiles[d.created_by].setor) : ''}</span></div>` : ''}
     </div>
     ${d.doc_pendente ? `<div class="es-box" style="background:var(--amber-soft);border-color:var(--amber-line)"><div class="ql" style="color:var(--amber-ink)">${ic('doc', 14)} Documento pendente</div>${esc(d.doc_pendente)}</div>` : ''}
     <div class="pv-grid">
-      <div class="es-box"><div class="ql">Dados do médico</div><div class="core-fields">
-        ${pvField('Nome', esc(d.name))}${pvField('CPF', esc(d.cpf), true)}${pvField('CRM', esc(d.crm), true)}${pvField('UF', esc(d.estado))}
-        ${pvField('WhatsApp', wa)}${pvField('RQE', esc(d.rqe))}${pvField('Formação', esc(d.status_especialidade))}${pvField('Setores', esc((d.setores || []).join(', ')))}
+      <div class="es-box"><div class="ql">Contato e cadastro</div><div class="core-fields">
+        ${pvField('WhatsApp', wa)}${pvField('CRM', esc(d.crm), true)}${pvField('Formação', esc(d.status_especialidade))}${pvField('Setores', esc((d.setores || []).join(', ')))}
+        ${d.cpf ? pvField('CPF', esc(d.cpf), true) : ''}${d.estado ? pvField('UF', esc(d.estado)) : ''}${d.rqe ? pvField('RQE', esc(d.rqe)) : ''}${pvField('Entrada', fmtDate(d.entry_date))}
       </div></div>
       <div class="es-box"><div class="ql">Credenciamento · ${esc(d.hospital)}</div><div class="core-fields">
-        ${pvField('DISC', d.disc ? esc(DISC_LABEL[d.disc]) : '')}${pvField('MedSimples', esc(d.medsimples))}${pvField('APP', yn(d.app))}${pvField('Procuração', yn(d.procuracao))}
-        ${pvField('Link enviado', yn(d.link_enviado))}${pvField('Cobrança', esc(d.cobranca))}${pvField('Cobrança 2', esc(d.cobranca2))}${pvField('Cobrança MedSimples', esc(d.cobranca_medsimples))}
-        ${pvField('Dt. cobrança doc.', esc(d.dt_cobranca_doc))}${pvField('Dt. e-mail enviado', esc(d.dt_email_enviado))}${pvField('Dt. resposta hospital', esc(d.dt_resp_hospital))}
-      </div></div>
+        ${pvField('Procuração', yn(d.procuracao))}${pvField('App', yn(d.app))}${pvField('Link enviado', yn(d.link_enviado))}${pvField('DISC', d.disc ? esc(DISC_LABEL[d.disc]) : '')}
+        ${d.medsimples ? pvField('MedSimples', esc(d.medsimples)) : ''}
+      </div>
+      ${[d.cobranca, d.cobranca2, d.cobranca_medsimples, d.dt_cobranca_doc, d.dt_email_enviado, d.dt_resp_hospital].some(Boolean) ? `<details class="nd-more" style="margin-top:14px"><summary>Anotações do sistema antigo</summary><div class="core-fields" style="margin-top:10px">
+        ${d.cobranca ? pvField('Cobrança', esc(d.cobranca)) : ''}${d.cobranca2 ? pvField('Cobrança 2', esc(d.cobranca2)) : ''}${d.cobranca_medsimples ? pvField('Cobrança MedSimples', esc(d.cobranca_medsimples)) : ''}
+        ${d.dt_cobranca_doc ? pvField('Dt. cobrança doc.', esc(d.dt_cobranca_doc)) : ''}${d.dt_email_enviado ? pvField('Dt. e-mail enviado', esc(d.dt_email_enviado)) : ''}${d.dt_resp_hospital ? pvField('Dt. resposta hospital', esc(d.dt_resp_hospital)) : ''}
+      </div></details>` : ''}</div>
     </div>
     ${d.observations ? `<div class="es-box"><div class="ql">Observações</div><div style="font-size:13.5px;line-height:1.55;white-space:pre-wrap">${esc(d.observations)}</div></div>` : ''}
     <div class="es-box"><div class="ql">Outros cadastros deste médico</div>${otherHospitals(d)}</div>`;
@@ -346,9 +347,12 @@ function editDoctorDialog(d) {
       ${sel('ed-disc', 'DISC', [['', '(Vazio)'], ...DISC.map((s) => [s, DISC_LABEL[s]])], d.disc)}
       ${sel('ed-med', 'MedSimples', [['', '(Vazio)'], ['Sim', 'Sim'], ['Não', 'Não']], d.medsimples)}
       <div class="field full"><label>Setores</label><div class="checks" id="ed-setores">${uniq([...SETORES, ...(d.setores || [])]).map((s) => `<label class="${(d.setores || []).includes(s) ? 'on' : ''}"><input type="checkbox" value="${esc(s)}" ${(d.setores || []).includes(s) ? 'checked' : ''}> ${esc(s)}</label>`).join('')}</div></div>
-      ${i('ed-docpend', 'Doc. pendente', d.doc_pendente)}${i('ed-cob', 'Cobrança', d.cobranca)}${i('ed-cobmed', 'Cobrança MedSimples', d.cobranca_medsimples)}${i('ed-cob2', 'Cobrança 2', d.cobranca2)}
-      ${i('ed-dtdoc', 'Dt. cobrança doc.', d.dt_cobranca_doc)}${i('ed-dtmail', 'Dt. e-mail enviado', d.dt_email_enviado)}${i('ed-dtresp', 'Dt. resposta hospital', d.dt_resp_hospital)}
+      ${i('ed-docpend', 'Doc. pendente', d.doc_pendente)}
       <div class="field full"><label>Observações</label><textarea class="inp" id="ed-obs">${esc(d.observations)}</textarea></div>
+      <details class="nd-more full" style="grid-column:1/-1"><summary>Anotações do sistema antigo</summary><div class="form-grid" style="margin-top:10px">
+      ${i('ed-cob', 'Cobrança', d.cobranca)}${i('ed-cobmed', 'Cobrança MedSimples', d.cobranca_medsimples)}${i('ed-cob2', 'Cobrança 2', d.cobranca2)}
+      ${i('ed-dtdoc', 'Dt. cobrança doc.', d.dt_cobranca_doc)}${i('ed-dtmail', 'Dt. e-mail enviado', d.dt_email_enviado)}${i('ed-dtresp', 'Dt. resposta hospital', d.dt_resp_hospital)}
+      </div><div class="hint">Hoje as cobranças ficam no histórico e na próxima ação. Estes campos ficam só para consulta.</div></details>
     </div></div>
     <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="ed-save">Salvar</button></div>`, { size: 'lg' });
   const el = m.el;

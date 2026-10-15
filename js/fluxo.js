@@ -152,16 +152,12 @@ function renderKpis() {
   const mine = nextCounts(true), team = nextCounts(false);
   ['#fx-hoje-n', '#rail-hoje-n'].forEach((sel) => { const hb = $(sel); if (hb) { hb.hidden = !(mine.late + mine.hoje); hb.textContent = mine.late + mine.hoje; } });
   $('#fx-kpis').innerHTML = `
-    <span class="op-kpi ${n !== all.length ? 'warn' : ''}">Exibindo <b>${n}</b></span>
-    <span class="op-kpi clk ${F.next === 'ate_hoje' && F.resp === 'me' ? 'on' : ''}" data-k="minhas" title="Minhas ações de hoje e atrasadas">Minhas ações para hoje <b>${mine.late + mine.hoje}</b></span>
-    <span class="op-kpi">Em andamento <b>${open.length}</b></span>
-    <span class="op-kpi clk ${F.stage === 'aprovado' ? 'on' : ''}" data-k="aprovado">Aprovados <b>${all.filter((d) => d.stage === 'aprovado').length}</b></span>
-    <span class="op-kpi clk ${F.stage === 'documentacao_pendente' ? 'on' : ''}" data-k="docpend">Doc. pendente <b>${all.filter((d) => d.stage === 'documentacao_pendente').length}</b></span>
-    <span class="op-kpi clk bad ${F.slaVencido ? 'on' : ''}" data-k="sla">SLA vencido <b>${venc}</b></span>
-    <span class="op-kpi clk bad ${F.priority === 'urgente' ? 'on' : ''}" data-k="urg">Urgentes <b>${all.filter((d) => d.priority === 'urgente' && !FINAL_STAGES.includes(d.stage)).length}</b></span>
+    <span class="op-kpi clk ${F.next === 'ate_hoje' && F.resp === 'me' ? 'on' : ''}" data-k="minhas" title="Minhas ações de hoje e atrasadas">Minhas ações <b>${mine.late + mine.hoje}</b></span>
+    <span class="op-kpi clk bad ${F.next === 'atrasada' && !F.resp ? 'on' : ''}" data-k="atrasadas" title="Ações atrasadas de toda a equipe">Atrasadas <b>${team.late}</b></span>
+    <span class="op-kpi clk bad ${F.slaVencido ? 'on' : ''}" data-k="sla" title="Em andamento com o SLA da etapa vencido">SLA vencido <b>${venc}</b></span>
     <span class="op-kpi clk ${team.sem ? 'warn' : ''} ${F.next === 'sem' ? 'on' : ''}" data-k="semacao" title="Médicos em andamento sem próxima ação definida">Sem próxima ação <b>${team.sem}</b></span>
-    <span class="op-kpi dim">SLA cumprido <b>${pct}%</b></span>
-    <span class="op-kpi dim">Cadastros <b>${all.length}</b></span>`;
+    <span style="flex:1"></span>
+    <span class="op-kpi dim ${n !== open.length ? 'warn' : ''}" title="${all.length} cadastros no total · ${pct}% dentro do SLA">Exibindo <b>${n}</b></span>`;
   $$('#fx-kpis [data-k]').forEach((k) => k.onclick = () => {
     const v = k.dataset.k;
     if (v === 'aprovado') F.stage = F.stage === 'aprovado' ? '' : 'aprovado';
@@ -170,6 +166,7 @@ function renderKpis() {
     if (v === 'urg') F.priority = F.priority === 'urgente' ? '' : 'urgente';
     if (v === 'minhas') { const on = F.next === 'ate_hoje' && F.resp === 'me'; F.next = on ? '' : 'ate_hoje'; F.resp = on ? '' : 'me'; }
     if (v === 'semacao') { F.next = F.next === 'sem' ? '' : 'sem'; F.resp = ''; }
+    if (v === 'atrasadas') { const on = F.next === 'atrasada' && !F.resp; F.next = on ? '' : 'atrasada'; F.resp = ''; }
     buildFilters(); refreshFluxo();
   });
 }
@@ -285,7 +282,6 @@ function openPrioridades() {
     const why = []; let sc = 0;
     const add = (n, t) => { sc += n; why.push(t); };
     if (d.priority === 'urgente') add(40, 'urgente');
-    if (d.priority === 'hospital_novo') add(35, 'hospital novo (SLA 3h)');
     const s = doctorSla(d);
     if (s.status === 'urgent') add(Math.min(30, 10 + Math.round(-s.remaining / 24) * 2), `SLA vencido há ${Math.max(1, Math.round(-s.remaining / 24))}d úteis`);
     else if (s.status === 'warning') add(15, 'SLA vencendo');
@@ -658,7 +654,7 @@ async function moveDoctor(d, toStage) {
 
 /** Aviso ao Painel CallMed Connect (WhatsApp automático). Só roda se a integração estiver configurada. */
 function notifyPainel(d, stage) {
-  const ETAPAS_PAINEL = ['aguardando_contato', 'aguardando_medico', 'enviar_documentos_juridico', 'aguardando_juridico', 'documentacao_pendente', 'aguardando_hospital', 'aprovado', 'reprovado'];
+  const ETAPAS_PAINEL = ['aguardando_contato', 'aguardando_medico', 'aguardando_juridico', 'documentacao_pendente', 'aguardando_hospital', 'aprovado', 'reprovado'];
   if (!window.FLOW_CONFIG.painelWebhook || !d.whatsapp || !ETAPAS_PAINEL.includes(stage)) return;
   sb.functions.invoke('flow-notify-painel', { body: { doctor_id: d.id } }).catch(() => { /* não bloqueia o fluxo */ });
 }
@@ -736,7 +732,7 @@ function renderIndicadores() {
   const hospitals = uniq(S.doctors.map((d) => d.hospital)).sort();
   root.innerHTML = `
     <div class="pg-head"><h2>Indicadores</h2><span class="sub">Funil do credenciamento, SLA e onde estão os gargalos.</span>
-      <span class="right"><select class="inp" id="ind-h" style="width:260px"><option value="">Todos os hospitais</option>${hospitals.map((h) => `<option ${IND.hospital === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></span></div>
+      <span class="right"><button class="btn btn-line btn-sm" data-goview="relatorios">${ic('file', 14)}Relatórios detalhados</button><select class="inp" id="ind-h" style="width:260px"><option value="">Todos os hospitais</option>${hospitals.map((h) => `<option ${IND.hospital === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></span></div>
     <div class="kpis">
       <div class="kpi"><span class="l">Cadastros</span><span class="v">${total}</span><span class="s">${open.length} em andamento</span></div>
       <div class="kpi click" data-kgo="${esc(JSON.stringify({ ...hf, stage: 'aprovado' }))}"><span class="l">Aprovados</span><span class="v" style="color:var(--green)">${apr}</span><span class="s">${apr + rep ? Math.round((apr / (apr + rep)) * 100) : 0}% de aprovação</span></div>

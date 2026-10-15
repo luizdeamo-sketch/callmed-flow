@@ -16,7 +16,7 @@ function stageEvents(acts) {
     if (!a.doctor_id || a.type !== 'stage_change') return;
     let st = null;
     if (a.description === 'Cadastro criado no sistema') st = 'aguardando_contato';
-    else if (a.description.startsWith('Movido para ')) st = byLabel[a.description.slice(12)] || null;
+    else if (a.description.startsWith('Movido para ')) { const l = a.description.slice(12); st = byLabel[l] || STAGE_ALIASES[l] || null; }
     if (st) (ev[a.doctor_id] ||= []).push({ at: new Date(a.created_at), stage: st });
   });
   return ev;
@@ -173,7 +173,7 @@ function drawReports(acts, rqes) {
       <select class="inp" id="rf-hosp"><option value="">Todos hospitais</option>${hospitals.map((h) => opt(h, h, RF.hospital)).join('')}</select>
       <select class="inp" id="rf-stage"><option value="">Todas etapas</option>${S.stages.map((s) => opt(s.id, s.label, RF.stage)).join('')}</select>
       <select class="inp" id="rf-setor"><option value="">Todos setores</option>${SETORES.map((s) => opt(s, s, RF.setor)).join('')}</select>
-      <select class="inp" id="rf-prio"><option value="">Todas urgências</option>${opt('urgente', 'Urgente', RF.priority)}${opt('rotina', 'Rotina', RF.priority)}${opt('hospital_novo', 'Hospital novo', RF.priority)}</select>
+      <select class="inp" id="rf-prio"><option value="">Todas urgências</option>${opt('urgente', 'Urgente', RF.priority)}${opt('rotina', 'Rotina', RF.priority)}</select>
       <select class="inp" id="rf-owner"><option value="">Todos responsáveis</option>${owners.map((o) => opt(o, S.profiles[o]?.display_name || 'Usuário removido', RF.owner)).join('')}</select>
       <select class="inp" id="rf-sla"><option value="">Status SLA: todos</option>${opt('urgent', 'Vencidos', RF.slaStatus)}${opt('warning', 'Atenção', RF.slaStatus)}${opt('ok', 'No prazo', RF.slaStatus)}</select>
       <input class="inp" id="rf-q" placeholder="Buscar médico" value="${esc(RF.q)}" style="width:160px">

@@ -54,7 +54,17 @@ const STATUS_ESP = ['FORMADO', 'FORMADO C/ RQE', 'R1', 'R2', 'R3'];
 const DISC = ['ADERENTE', 'NÃO APLICAVEL', 'REPROVADO', 'AGUARDANDO RETORNO'];
 const DISC_LABEL = { 'ADERENTE': 'Aderente', 'NÃO APLICAVEL': 'Não Aplicável', 'REPROVADO': 'Reprovado', 'AGUARDANDO RETORNO': 'Ag. Retorno' };
 const DISC_CLASS = { 'ADERENTE': 'g', 'REPROVADO': 'r', 'AGUARDANDO RETORNO': 'a', 'NÃO APLICAVEL': '' };
-const PRIORITIES = { rotina: 'Rotina', urgente: 'Urgente', hospital_novo: 'Hospital novo · SLA 3h' };
+const PRIORITIES = { rotina: 'Rotina', urgente: 'Urgente' };
+/** Urgência vale por alguns dias; depois volta a rotina sozinha. */
+const URGENTE_DIAS = 7;
+function urgenteAte() { const d = new Date(); d.setDate(d.getDate() + URGENTE_DIAS); return ymd(d); }
+/** Nomes antigos de etapa (histórico do Lovable / antes da simplificação) → etapa atual. */
+const STAGE_ALIASES = {
+  'Aguardando Contato': 'aguardando_contato', 'Aguardando Retorno Médico': 'aguardando_medico',
+  'Enviar Documentos Jurídico': 'aguardando_juridico', 'Aguardando Jurídico': 'aguardando_juridico', 'R3': 'em_espera',
+  'Documentação Pendente': 'documentacao_pendente', 'Documentação Recebida - Enviar Email': 'aguardando_hospital',
+  'Aguardando Retorno Hospital': 'aguardando_hospital',
+};
 const SETOR_USUARIO = { cadastro: 'Cadastro', escalas: 'Escalas', marketing: 'Marketing', diretoria: 'Diretoria' };
 const REQUIRED_DOCUMENTS = [
   'Antecedente Criminal', 'ATLS/ACLS', 'Carta de Recomendação / Declaração de Experiência', 'Carteira de CRM - Frente e verso',
@@ -224,11 +234,13 @@ function doctorSla(d) {
     sla = stageById(d.stage)?.sla_hours ?? d.sla_hours ?? 24;
     elapsed = businessHours(d.stage_entered_at);
   }
+  if (sla >= 9999) return { sla, elapsed, remaining: Infinity, status: 'none' };
   const remaining = sla - elapsed;
   const status = remaining <= 0 ? 'urgent' : remaining <= sla * 0.2 ? 'warning' : 'ok';
   return { sla, elapsed, remaining, status };
 }
 function fmtRemaining(r) {
+  if (!isFinite(r)) return 'sem prazo';
   if (r <= 0) return 'Vencido';
   if (r < 1) return `${Math.round(r * 60)}min`;
   return `${Math.round(r)}h`;
@@ -330,6 +342,8 @@ async function loadCore() {
   ]);
   S.stages = stages;
   S.hospitals = hospitals;
+  const hojeYmd = ymdToday();
+  doctors.forEach((d) => { if (d.priority === 'urgente' && d.urgente_ate && d.urgente_ate < hojeYmd) d.priority = 'rotina'; });
   S.doctors = doctors;
   S.profiles = Object.fromEntries(profiles.map((p) => [p.user_id, p]));
   S.roles = {};
@@ -414,20 +428,21 @@ function subscribeNotifs() {
 
 // ---------- navegação ----------
 const VIEWS = {};
-const VIEW_TITLES = { fluxo: 'Fluxo', medico: 'Médico', indicadores: 'Indicadores', sugestoes: 'Sugestões', rqe: 'RQE', relatorios: 'Relatórios', auditoria: 'Auditoria', usuarios: 'Administração' };
-const VIEW_SUBS = { fluxo: 'Credenciamento de médicos', indicadores: 'Funil, SLA e gargalos', rqe: 'Registro de especialista no CREMESP', relatorios: 'Conversão, tempo e produtividade', auditoria: 'Quem fez o quê, e quando', sugestoes: 'Ideias e problemas do sistema', usuarios: 'Usuários e hospitais' };
+const VIEW_TITLES = { hoje: 'Hoje', fluxo: 'Fluxo', medico: 'Médico', indicadores: 'Indicadores', sugestoes: 'Sugestões', rqe: 'RQE', relatorios: 'Relatórios', auditoria: 'Auditoria', usuarios: 'Administração' };
+const VIEW_SUBS = { hoje: 'O que fazer agora', fluxo: 'Credenciamento de médicos', indicadores: 'Funil, SLA e gargalos', rqe: 'Registro de especialista no CREMESP', relatorios: 'Conversão, tempo e produtividade', auditoria: 'Quem fez o quê, e quando', sugestoes: 'Ideias e problemas do sistema', usuarios: 'Usuários e hospitais' };
 let currentView = 'fluxo';
 function go(view) {
   currentView = view;
-  $$('#rail .nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === (view === 'medico' ? 'fluxo' : view)));
+  const railOf = { medico: 'fluxo', relatorios: 'indicadores', auditoria: 'usuarios', rqe: 'usuarios' };
+  $$('#rail .nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === (railOf[view] || view)));
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
   $('#hdr-title').textContent = VIEW_TITLES[view];
   $('#hdr-sub').textContent = VIEW_SUBS[view] || '';
-  try { localStorage.setItem('flow:view', view); } catch (_) { /* ignora */ }
+  try { localStorage.setItem('flow:view2', view); } catch (_) { /* ignora */ }
   VIEWS[view] && VIEWS[view]();
 }
 $$('#rail .nav-btn').forEach((b) => b.addEventListener('click', () => go(b.dataset.view)));
-$('#rail-hoje').addEventListener('click', () => openHoje());
+document.addEventListener('click', (e) => { const b = e.target.closest('[data-goview]'); if (b) go(b.dataset.goview); });
 
 async function reloadAll(silent) {
   const btn = $('#btn-reload');
@@ -455,10 +470,10 @@ async function startApp() {
   $('#btn-backup').hidden = !S.isAdmin;
   loadNotifs();
   subscribeNotifs();
-  let v = 'fluxo';
-  try { v = localStorage.getItem('flow:view') || 'fluxo'; } catch (_) { /* ignora */ }
-  if ((v === 'usuarios' && !S.isAdmin) || v === 'medico') v = 'fluxo';
-  go(VIEWS[v] ? v : 'fluxo');
+  let v = 'hoje';
+  try { v = localStorage.getItem('flow:view2') || 'hoje'; } catch (_) { /* ignora */ }
+  if ((['usuarios', 'auditoria', 'rqe'].includes(v) && !S.isAdmin) || v === 'medico') v = 'hoje';
+  go(VIEWS[v] ? v : 'hoje');
   // atualização automática a cada 5 min com a aba visível
   setInterval(() => { if (document.visibilityState === 'visible' && !document.querySelector('.modal-bg')) reloadAll(true); }, 5 * 60 * 1000);
 }
