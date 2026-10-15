@@ -144,7 +144,7 @@ function drawReports(acts, rqes) {
     body = `<div class="panel"><h3>Tempo médio por etapa (horas úteis, histórico no período) × SLA</h3>
       ${rep.stageAvg.map((x) => `<div class="hbar" style="grid-template-columns:220px 1fr 110px"><span class="t">${esc(x.stage.label)}</span>
         <span class="b" style="position:relative"><i style="width:${(x.avg / max) * 100}%;background:${x.over ? 'var(--red)' : 'var(--brand)'}"></i><em style="position:absolute;top:-2px;bottom:-2px;left:${(x.stage.sla_hours / max) * 100}%;border-left:2px dashed var(--amber)"></em></span>
-        <span class="n">${Math.round(x.avg)}h / SLA ${x.stage.sla_hours}h <span class="muted">(${x.n})</span></span></div>`).join('')}
+        <span class="n">${Math.round(x.avg)}h / ${x.stage.sla_hours >= 9999 ? 'sem SLA' : `SLA ${x.stage.sla_hours}h`} <span class="muted">(${x.n})</span></span></div>`).join('')}
       <div class="muted small">Linha tracejada = SLA da etapa. Barra vermelha = média acima do SLA.</div></div>`;
   } else if (RF.tab === 'hosp') {
     body = `<table class="t"><thead><tr><th>Hospital</th><th>Total</th><th>No período</th><th>Aprovados</th><th>Reprovados</th><th>Em pipeline</th><th>Vencidos</th><th>Atenção</th><th>T. médio aprov.</th><th>SLA</th></tr></thead><tbody>
@@ -166,7 +166,7 @@ function drawReports(acts, rqes) {
   }
 
   root.innerHTML = `
-    <div class="pg-head"><button class="btn-ghost" data-goview="indicadores">← Indicadores</button><h2>Relatórios</h2><span class="sub">Conversão, tempo por etapa, SLA, hospitais e produtividade da equipe — com exportação.</span></div>
+    <div class="pg-head"><h2>Relatórios</h2><span class="sub">Conversão, tempo por etapa, SLA, hospitais e produtividade da equipe — com exportação.</span><span class="right"><button class="btn btn-line btn-sm" id="rf-hist" title="Toda movimentação registrada no Flow, com data, usuário, médico e hospital — para auditoria">${ic('history', 14)}Histórico completo (Excel)</button></span></div>
     <div class="toolbar">
       <select class="inp" id="rf-period">${opt('7', 'Últimos 7 dias', RF.period)}${opt('30', 'Últimos 30 dias', RF.period)}${opt('90', 'Últimos 90 dias', RF.period)}${opt('all', 'Todo o período', RF.period)}${opt('custom', 'Personalizado', RF.period)}</select>
       ${RF.period === 'custom' ? `<input type="date" class="inp" id="rf-from" value="${RF.from}"><input type="date" class="inp" id="rf-to" value="${RF.to}">` : ''}
@@ -198,6 +198,7 @@ function drawReports(acts, rqes) {
   $$('#view-relatorios [data-doc]').forEach((tr) => tr.onclick = () => openDoctor(S.doctors.find((d) => d.id === tr.dataset.doc)));
   $('#rf-csv').onclick = () => exportReport(rep, 'csv');
   $('#rf-xlsx').onclick = () => exportReport(rep, 'xlsx');
+  $('#rf-hist').onclick = (e) => exportHistorico(e.currentTarget);
 }
 
 async function exportReport(rep, kind) {
@@ -256,7 +257,7 @@ function drawAudit(rows) {
       <select class="inp" id="au-u"><option value="">Todos usuários</option>${users.map((u) => `<option ${AF.user === u ? 'selected' : ''}>${esc(u)}</option>`).join('')}</select>
       <select class="inp" id="au-t"><option value="">Todos tipos</option>${Object.entries(TYPES).map(([k, l]) => `<option value="${k}" ${AF.type === k ? 'selected' : ''}>${l}</option>`).join('')}</select>
       <select class="inp" id="au-m"><option value="">Todos módulos</option><option ${AF.mod === 'CRM' ? 'selected' : ''}>CRM</option><option ${AF.mod === 'RQE' ? 'selected' : ''}>RQE</option></select>
-      <span class="tag">${list.length} registro(s)</span>
+      <span class="tag">${list.length} registro(s)</span><button class="btn btn-line btn-sm" id="au-x" title="Exporta os registros filtrados">${ic('download', 14)}Exportar Excel</button>
     </div>
     <div class="panel" style="padding:0;overflow:auto;max-height:calc(100vh - 290px)"><table class="t"><thead><tr><th>Ação</th><th>Tipo</th><th>Usuário</th><th>Data / hora</th><th>Referência</th><th>Módulo</th></tr></thead><tbody>
       ${list.slice(0, 500).map((a) => `<tr><td>${esc(a.description)}</td><td>${TYPES[a.type] || a.type}</td><td>${esc(who(a))}</td><td class="mono small">${fmtDate(a.created_at, true)}</td><td>${a.doctor_id && byId[a.doctor_id] ? `<a href="#" data-doc="${a.doctor_id}">${esc(ref(a))}</a>` : esc(ref(a))}</td><td><span class="tag">${a.rqe_request_id ? 'RQE' : 'CRM'}</span></td></tr>`).join('')}
@@ -268,4 +269,28 @@ function drawAudit(rows) {
   $('#au-t').onchange = (e) => { AF.type = e.target.value; redraw(); };
   $('#au-m').onchange = (e) => { AF.mod = e.target.value; redraw(); };
   $$('#view-auditoria [data-doc]').forEach((a) => a.onclick = (e) => { e.preventDefault(); openDoctor(byId[a.dataset.doc]); });
+  $('#au-x').onclick = () => auditXlsx(list.map((a) => ({ 'Data/hora': fmtDate(a.created_at, true), Usuário: who(a), Tipo: TYPES[a.type] || a.type, Ação: a.description, Médico: ref(a), Hospital: byId[a.doctor_id]?.hospital || '', Módulo: a.rqe_request_id ? 'RQE' : 'CRM' })), 'auditoria_filtrada');
+}
+
+/** Gera um Excel para auditoria a partir de linhas já montadas. */
+async function auditXlsx(rows, base) {
+  if (!rows.length) return toast('Nenhum registro para exportar.', 'err');
+  const X = await loadXlsx();
+  const wb = X.utils.book_new();
+  X.utils.book_append_sheet(wb, X.utils.json_to_sheet(rows), 'Registros');
+  X.writeFile(wb, `${base}_${new Date().toISOString().slice(0, 10)}.xlsx`);
+  toast(`${rows.length} registro(s) exportado(s)`, 'ok');
+}
+
+/** Toda a movimentação do Flow (sem o limite de 1.000 da tela de Auditoria). */
+async function exportHistorico(btn) {
+  btn.disabled = true; const label = btn.innerHTML; btn.textContent = 'Gerando...';
+  try {
+    const acts = await fetchAll('flow_activities', '*', { order: 'created_at', asc: true });
+    const byId = Object.fromEntries(S.doctors.map((d) => [d.id, d]));
+    const TYPES = { stage_change: 'Movimentação', note: 'Nota / edição', doc: 'Documento', contact: 'Contato', cobranca: 'Cobrança', acao: 'Próxima ação', admin: 'Administração' };
+    await auditXlsx(acts.map((a) => ({ 'Data/hora': fmtDate(a.created_at, true), Usuário: a.created_by_name || 'Sistema', Tipo: TYPES[a.type] || a.type, Ação: a.description,
+      Médico: byId[a.doctor_id]?.name || (a.doctor_id ? '(médico excluído)' : ''), Hospital: byId[a.doctor_id]?.hospital || '', 'Etapa atual': byId[a.doctor_id] ? stageLabel(byId[a.doctor_id].stage) : '', Módulo: a.rqe_request_id ? 'RQE' : 'CRM' })), 'historico_completo_flow');
+  } catch (e) { toast('Erro ao exportar: ' + e.message, 'err'); }
+  btn.disabled = false; btn.innerHTML = label;
 }

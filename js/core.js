@@ -433,7 +433,7 @@ const VIEW_SUBS = { hoje: 'O que fazer agora', fluxo: 'Credenciamento de médico
 let currentView = 'fluxo';
 function go(view) {
   currentView = view;
-  const railOf = { medico: 'fluxo', relatorios: 'indicadores', auditoria: 'usuarios', rqe: 'usuarios' };
+  const railOf = { medico: 'fluxo', auditoria: 'usuarios', rqe: 'usuarios' };
   $$('#rail .nav-btn').forEach((b) => b.classList.toggle('active', b.dataset.view === (railOf[view] || view)));
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
   $('#hdr-title').textContent = VIEW_TITLES[view];
