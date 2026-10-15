@@ -91,7 +91,7 @@ function nextActionDialog(d, { concluir = false, onDone } = {}) {
   const respAtual = d.proximo_responsavel_id || S.user.id;
   const pessoas = Object.values(S.profiles).filter((p) => p.ativo).sort((a, b) => a.display_name.localeCompare(b.display_name));
   const m = openModal(`
-    <div class="modal-head"><div><h2>${concluir ? '✔ Ação feita — qual é a próxima?' : 'Próxima ação'}</h2><div class="om-sub">${esc(d.name)} · ${esc(d.hospital)} · ${esc(stageLabel(d.stage))}</div></div><button class="x" data-close>✕</button></div>
+    <div class="modal-head"><div><h2>${concluir ? 'Ação feita: qual é a próxima?' : 'Próxima ação'}</h2><div class="om-sub">${esc(d.name)} · ${esc(d.hospital)} · ${esc(stageLabel(d.stage))}</div></div><button class="x" data-close>✕</button></div>
     <div class="modal-body">
       ${concluir ? `<div class="es-box" style="background:var(--green-soft);border-color:#bfe6d4"><div class="ql" style="color:var(--green)">Feito: ${esc(acaoAtual)}</div>
         <textarea class="inp" id="na-res" rows="2" placeholder="Resultado (opcional) — ex.: médico prometeu enviar o diploma até sexta"></textarea></div>` : ''}

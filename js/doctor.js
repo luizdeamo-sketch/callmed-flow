@@ -52,7 +52,7 @@ function openNewDoctor() {
       </details>
       <div class="alert b small" id="nd-summary" hidden></div>
     </div>
-    <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="nd-ok" disabled>Cadastrar e encaminhar</button></div>`);
+    <div class="modal-foot"><span class="muted small" id="nd-missing" style="margin-right:auto;align-self:center"></span><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="nd-ok" disabled>Cadastrar e encaminhar</button></div>`);
   const el = m.el;
   const hospSel = new Set(), setorSel = new Set(), reasons = {};
 
@@ -90,7 +90,14 @@ function openNewDoctor() {
   const check = () => {
     const conf = conflictsFor();
     const blockedOk = [...hospSel].filter((h) => conf[h]).every((h) => (reasons[h] || '').trim().length >= 5);
-    $('#nd-ok', el).disabled = !($('#nd-name', el).value.trim() && $('#nd-wa', el).value.trim() && hospSel.size && setorSel.size && blockedOk);
+    const falta = [];
+    if (!$('#nd-name', el).value.trim()) falta.push('nome');
+    if (!$('#nd-wa', el).value.trim()) falta.push('WhatsApp');
+    if (!hospSel.size) falta.push('hospital');
+    if (!setorSel.size) falta.push('setor');
+    if (!blockedOk) falta.push('motivo da duplicidade');
+    $('#nd-missing', el).textContent = falta.length ? 'Falta: ' + falta.join(', ') : '';
+    $('#nd-ok', el).disabled = falta.length > 0;
   };
   $$('#nd-setores input', el).forEach((i) => i.onchange = () => {
     i.checked ? setorSel.add(i.value) : setorSel.delete(i.value);
@@ -210,7 +217,7 @@ function drawMedico() {
   $$('.pv-tab', root).forEach((b) => b.onclick = () => { PV.tab = b.dataset.tab; drawMedico(); });
   $('#pv-prio').onclick = async () => {
     const np = d.priority === 'urgente' ? 'rotina' : 'urgente';
-    if (await updateDoctor(d, { priority: np, urgente_ate: np === 'urgente' ? urgenteAte() : null }, np === 'urgente' ? `Marcado como urgente até ${fmtYmd(urgenteAte())}` : 'Prioridade alterada para Rotina')) { await loadDoctorDetail(); drawMedico(); }
+    if (await updateDoctor(d, { priority: np, urgente_ate: np === 'urgente' ? urgenteAte() : null }, np === 'urgente' ? `Marcado como urgente até ${fmtYmd(urgenteAte())}` : 'Prioridade alterada para Rotina')) { toast(np === 'urgente' ? `Urgente até ${fmtYmd(urgenteAte())}` : 'Voltou para rotina', 'ok'); await loadDoctorDetail(); drawMedico(); }
   };
   bindNextStrip(d, async () => { await loadDoctorDetail(); drawMedico(); });
   $('#pa-edit').onclick = () => editDoctorDialog(d);
@@ -284,9 +291,12 @@ function drawHistTab(body, d) {
       <div class="hist">${PV.acts.map((a) => `<div class="it">${ICON[a.type] || '•'} ${esc(a.description)}<div class="m">${fmtFull(a.created_at)} · por ${esc(a.created_by_name || 'Sistema')}</div></div>`).join('') || '<div class="empty">Sem histórico</div>'}</div></div>`;
   const add = async () => {
     const t = $('#pv-note').value.trim();
-    if (!t) return;
+    if (!t) { toast('Escreva a anotação antes de registrar.', 'err'); $('#pv-note').focus(); return; }
+    const btn = $('#pv-note-ok'); btn.disabled = true;
     const { error } = await sb.from('flow_activities').insert({ doctor_id: d.id, type: 'note', description: t });
+    btn.disabled = false;
     if (error) return toast('Erro ao salvar: ' + error.message, 'err');
+    toast('Anotação registrada', 'ok');
     await loadDoctorDetail(); drawMedico();
   };
   $('#pv-note-ok').onclick = add;
@@ -323,7 +333,7 @@ function drawDocsTab(body, d) {
   tgl('#dc-app', 'app', 'APP'); tgl('#dc-proc', 'procuracao', 'Procuração'); tgl('#dc-link', 'link_enviado', 'Link enviado');
 }
 async function setDocs(d, names, received) {
-  if (!names.length) return;
+  if (!names.length) { toast('Nenhum documento pendente na lista filtrada.', ''); return; }
   const rows = names.map((n) => ({ doctor_id: d.id, document_name: n, status: received ? 'enviado' : 'nao_enviado', updated_by: S.user.id }));
   const { error } = await sb.from('flow_doctor_documents').upsert(rows, { onConflict: 'doctor_id,document_name' });
   if (error) return toast('Erro ao atualizar documentos: ' + error.message, 'err');
@@ -331,6 +341,7 @@ async function setDocs(d, names, received) {
   await loadDoctorDetail();
   const rec = PV.docs.filter((x) => ['enviado', 'aprovado'].includes(x.status) && REQUIRED_DOCUMENTS.includes(x.document_name)).length;
   S.docProgress[d.id] = Math.round((rec / REQUIRED_DOCUMENTS.length) * 100);
+  if (names.length > 1) toast(`${names.length} documentos marcados como ${received ? 'recebidos' : 'pendentes'}`, 'ok');
   drawMedico();
 }
 

@@ -170,7 +170,7 @@ function drawHospitals() {
     </tbody></table></div>`;
   $('#h-add').onclick = async () => {
     const nome = $('#h-new').value.trim();
-    if (!nome) return;
+    if (!nome) { toast('Digite o nome do hospital.', 'err'); $('#h-new').focus(); return; }
     const { error } = await sb.from('flow_hospitals').insert({ nome });
     if (error) return toast(error.code === '23505' ? 'Esse hospital já existe.' : error.message, 'err');
     toast('Hospital adicionado', 'ok'); renderAdmin();
@@ -179,6 +179,7 @@ function drawHospitals() {
     const h = S.hospitals.find((x) => x.nome === b.dataset.htog);
     const { error } = await sb.from('flow_hospitals').update({ ativo: !h.ativo }).eq('nome', h.nome);
     if (error) return toast(error.message, 'err');
+    toast(`${h.nome} ${h.ativo ? 'inativado' : 'ativado'}`, 'ok');
     renderAdmin();
   });
   $$('[data-hren]').forEach((b) => b.onclick = () => {

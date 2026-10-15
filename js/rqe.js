@@ -26,7 +26,7 @@ function drawRqe() {
   const q = norm(R.search);
   const list = R.list.filter((r) => !q || norm(r.doctor?.name).includes(q) || norm(r.specialty).includes(q) || norm(r.doctor?.hospital).includes(q));
   root.innerHTML = `
-    <div class="pg-head"><h2>Solicitações de RQE</h2><span class="sub">Registro de Qualificação de Especialista no CREMESP — do pedido ao protocolo.</span></div>
+    <div class="pg-head"><button class="btn-ghost" data-goview="usuarios">← Admin</button><h2>Solicitações de RQE</h2><span class="sub">Registro de Qualificação de Especialista no CREMESP — do pedido ao protocolo.</span></div>
     <div class="kpis">
       <div class="kpi"><div class="l">Total</div><div class="v">${R.list.length}</div></div>
       <div class="kpi"><div class="l">Aprovados</div><div class="v" style="color:var(--green)">${R.list.filter((r) => r.stage === 'aprovado').length}</div></div>
