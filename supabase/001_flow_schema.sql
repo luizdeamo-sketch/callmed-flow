@@ -515,3 +515,37 @@ alter table public.flow_doctors
   add column if not exists motivo_reprovacao text not null default '',
   add column if not exists reprovacao_origem text not null default '';
 update public.flow_stages set label = 'Aguardando formação (R3)' where id = 'em_espera';
+
+-- ---------- migração 12 (15/10/2026, reunião com o time): sem etapa de espera, aviso do parecer, doc. do jurídico ----------
+alter table public.flow_doctors add column if not exists doc_juridico_enviado boolean not null default false;
+insert into public.flow_activities (doctor_id, type, description, created_by_name, created_at)
+select id, 'stage_change', 'Movido para Aguardando médico', 'Sistema', now() from public.flow_doctors where stage = 'em_espera';
+insert into public.flow_activities (doctor_id, type, description, created_by_name, created_at)
+select id, 'note', 'Etapa "Aguardando formação (R3)" foi extinta: médico voltou para Aguardando médico (segue marcado como R3)', 'Sistema', now() from public.flow_doctors where stage = 'em_espera';
+update public.flow_doctors
+   set stage = 'aguardando_medico', stage_entered_at = now(), sla_hours = 24,
+       proxima_acao = 'Verificar se já concluiu a residência', proxima_data = current_date + 5
+ where stage = 'em_espera';
+delete from public.flow_stages where id = 'em_espera';
+update public.flow_stages set position = 5 where id = 'aprovado';
+update public.flow_stages set position = 6 where id = 'reprovado';
+create or replace function public.flow_doctors_parecer_notify()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_dest uuid; v_msg text; v_actor text;
+begin
+  if new.parecer_juridico is null or new.parecer_juridico is not distinct from old.parecer_juridico then return new; end if;
+  v_dest := coalesce(new.proximo_responsavel_id, new.created_by);
+  if v_dest is null or v_dest = auth.uid() then return new; end if;
+  v_actor := coalesce((select nullif(display_name,'') from public.flow_profiles where user_id = auth.uid()), 'Jurídico');
+  v_msg := case new.parecer_juridico
+    when 'aprovado' then format('Jurídico liberou: %s (%s) está APTO — seguir com a documentação', new.name, new.hospital)
+    when 'aprovado_restricao' then format('Jurídico liberou COM RESTRIÇÃO: %s (%s) — %s', new.name, new.hospital, left(new.parecer_juridico_obs, 120))
+    else format('Jurídico NÃO aprovou: %s (%s) — %s', new.name, new.hospital, left(new.parecer_juridico_obs, 120)) end;
+  insert into public.flow_notifications (user_id, doctor_id, doctor_name, message, created_by_name)
+  values (v_dest, new.id, new.name, v_msg, v_actor);
+  return new;
+end $$;
+drop trigger if exists flow_doctors_parecer_notify on public.flow_doctors;
+create trigger flow_doctors_parecer_notify after update of parecer_juridico on public.flow_doctors
+  for each row execute function public.flow_doctors_parecer_notify();
+revoke execute on function public.flow_doctors_parecer_notify() from public, anon, authenticated;

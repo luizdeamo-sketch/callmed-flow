@@ -526,7 +526,7 @@ function renderJornada(list) {
     const sla = FINAL_STAGES.includes(d.stage) ? null : doctorSla(d);
     const todayPos = curIdx >= 0 ? curIdx + (now - cols[curIdx].start) / (cols[curIdx].end - cols[curIdx].start) : -1;
     return `<div class="op-row" data-doc="${d.id}">
-      <div class="op-left"><div class="n"><span class="sdot s-${sla ? sla.status : 'none'}"></span>${esc(d.name)}${d.priority === 'urgente' ? '<span class="tagx bad">URG</span>' : d.priority === 'hospital_novo' ? '<span class="tagx warn">3h</span>' : ''}</div>
+      <div class="op-left"><div class="n"><span class="sdot s-${sla ? sla.status : 'none'}"></span>${esc(d.name)}${d.priority === 'urgente' ? '<span class="tagx bad">URG</span>' : d.priority === 'hospital_novo' ? '<span class="tagx warn">3h</span>' : ''}${parecerChip(d)}</div>
         <div class="m">${esc(d.hospital)}${d.crm ? ' · ' + esc(d.crm) : ''}${d.status_especialidade ? ' · ' + esc(d.status_especialidade) : ''}${(d.setores || []).length ? ' · ' + esc(d.setores.join(', ')) : ''} · ${daysIn(d)}d${sla ? ` · <span style="color:${sla.status === 'urgent' ? 'var(--red)' : sla.status === 'warning' ? 'var(--amber)' : 'inherit'}">${sla.status === 'urgent' ? 'SLA vencido' : 'SLA ' + fmtRemaining(sla.remaining)}</span>` : ` · ${esc(stageLabel(d.stage))}`}${nextInline(d)}</div></div>
       <div class="op-right">${todayPos >= 0 ? `<div class="op-today" style="left:calc(${todayPos} * var(--dw))"></div>` : ''}
         ${segs.map((s) => { const st = stageById(s.st); const w = s.end - s.start + 1; return `<div class="seg" style="left:calc(${s.start} * var(--dw) + 2px);width:calc(${w} * var(--dw) - 4px);background:${esc(st?.color || '#999')}" title="${esc(st?.label || s.st)}">${w >= 2 || FX.gran !== 'dia' ? esc(st?.label || '') : ''}</div>`; }).join('')}</div></div>`;
@@ -563,12 +563,19 @@ function renderJornada(list) {
 }
 
 // ================= KANBAN =================
+/** Etiqueta colorida do parecer jurídico (verde / amarelo / vermelho). */
+function parecerChip(d) {
+  const p = PARECER_JUR[d.parecer_juridico];
+  if (!p) return '';
+  const curto = { aprovado: 'Jur. OK', aprovado_restricao: 'Jur. restrição', nao_aprovado: 'Jur. NÃO' }[d.parecer_juridico];
+  return `<span class="tagx ${p[1]}" title="Parecer jurídico: ${esc(p[0])}${d.parecer_juridico_obs ? ' — ' + esc(d.parecer_juridico_obs) : ''}">${curto}</span>`;
+}
 function cardHtml(d) {
   const sla = FINAL_STAGES.includes(d.stage) ? null : doctorSla(d);
   const prog = S.docProgress[d.id] || 0;
   const t = (on, label) => `<span class="tag ${on ? 'on' : 'off'}">${label}</span>`;
   return `<div class="kcard" draggable="true" data-id="${d.id}">
-    <div class="top"><span class="sdot s-${sla ? sla.status : 'none'}"></span><span class="nm" title="${esc(d.name)}">${esc(d.name)}</span>${d.priority === 'urgente' ? '<span class="tagx bad">URG</span>' : d.priority === 'hospital_novo' ? '<span class="tagx warn">3h</span>' : ''}</div>
+    <div class="top"><span class="sdot s-${sla ? sla.status : 'none'}"></span><span class="nm" title="${esc(d.name)}">${esc(d.name)}</span>${d.priority === 'urgente' ? '<span class="tagx bad">URG</span>' : d.priority === 'hospital_novo' ? '<span class="tagx warn">3h</span>' : ''}${parecerChip(d)}</div>
     <div class="kgrid"><span title="${esc((d.setores || []).join(', '))}">${esc((d.setores || []).join(', ') || '—')}</span><span title="${esc(d.hospital)}">${esc(d.hospital)}</span><span>${esc(d.crm || '—')}</span><span>${esc(d.whatsapp || '—')}</span></div>
     <div class="tags">${d.status_especialidade ? `<span class="tag">${esc(d.status_especialidade)}</span>` : ''}${d.disc ? `<span class="tag ${DISC_CLASS[d.disc]}">${esc(DISC_LABEL[d.disc])}</span>` : ''}${t(d.link_enviado, 'Link')}${t(d.app, 'APP')}${t(d.procuracao, 'Proc.')}</div>
     ${d.doc_pendente ? `<div class="pend" title="${esc(d.doc_pendente)}">${esc(d.doc_pendente)}</div>` : ''}

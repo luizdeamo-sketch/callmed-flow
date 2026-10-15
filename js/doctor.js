@@ -262,7 +262,7 @@ function drawResumoTab(body, d) {
         ${d.cpf ? pvField('CPF', esc(d.cpf), true) : ''}${d.estado ? pvField('UF', esc(d.estado)) : ''}${d.rqe ? pvField('RQE', esc(d.rqe)) : ''}${pvField('Entrada', fmtDate(d.entry_date))}
       </div></div>
       <div class="es-box"><div class="ql">Credenciamento · ${esc(d.hospital)}</div><div class="core-fields">
-        ${pvField('Procuração', yn(d.procuracao))}${pvField('App', yn(d.app))}${pvField('Link enviado', yn(d.link_enviado))}${pvField('DISC', d.disc ? esc(DISC_LABEL[d.disc]) : '')}
+        ${pvField('Procuração', yn(d.procuracao))}${pvField('App', yn(d.app))}${pvField('Link enviado', yn(d.link_enviado))}${pvField('Doc. do jurídico enviado', yn(d.doc_juridico_enviado))}${pvField('DISC', d.disc ? esc(DISC_LABEL[d.disc]) : '')}
         ${d.medsimples ? pvField('MedSimples', esc(d.medsimples)) : ''}
       </div>
       ${[d.cobranca, d.cobranca2, d.cobranca_medsimples, d.dt_cobranca_doc, d.dt_email_enviado, d.dt_resp_hospital].some(Boolean) ? `<details class="nd-more" style="margin-top:14px"><summary>Anotações do sistema antigo</summary><div class="core-fields" style="margin-top:10px">
@@ -297,7 +297,10 @@ function bindParecer(d) {
     if (!escolha) return toast('Escolha Aprovado, Aprovado com restrição ou Não aprovado.', 'err');
     if (escolha !== 'aprovado' && obs.length < 3) { toast('Descreva a restrição ou o motivo.', 'err'); $('#pj-obs').focus(); return; }
     if (escolha === d.parecer_juridico && obs === (d.parecer_juridico_obs || '')) return toast('Nada mudou no parecer.', '');
-    if (await updateDoctor(d, { parecer_juridico: escolha, parecer_juridico_obs: obs }, `Parecer jurídico: ${PARECER_JUR[escolha][0]}${obs ? ' — ' + obs : ''}`)) {
+    // apto (com ou sem restrição): o cadastro segue com a documentação; não apto: reprovar e registrar o motivo
+    const prox = escolha === 'nao_aprovado' ? 'Reprovar e registrar o motivo (parecer do jurídico)' : 'Seguir com a documentação';
+    const patch = { parecer_juridico: escolha, parecer_juridico_obs: obs, proxima_acao: prox, proxima_data: ymdToday(), proximo_responsavel_id: d.proximo_responsavel_id || d.created_by || S.user.id };
+    if (await updateDoctor(d, patch, `Parecer jurídico: ${PARECER_JUR[escolha][0]}${obs ? ' — ' + obs : ''}`)) {
       toast('Parecer jurídico registrado', 'ok'); await loadDoctorDetail(); drawMedico();
     }
   };
@@ -350,7 +353,7 @@ function drawDocsTab(body, d) {
       }).join('')}</div>
     </div>
     <div class="es-box"><div class="ql">Checklist adicional</div>
-      <div class="switches"><label><input type="checkbox" id="dc-app" ${d.app ? 'checked' : ''}> APP</label><label><input type="checkbox" id="dc-proc" ${d.procuracao ? 'checked' : ''}> Procuração</label><label><input type="checkbox" id="dc-link" ${d.link_enviado ? 'checked' : ''}> Link enviado</label></div></div>`;
+      <div class="switches"><label><input type="checkbox" id="dc-app" ${d.app ? 'checked' : ''}> APP</label><label><input type="checkbox" id="dc-proc" ${d.procuracao ? 'checked' : ''}> Procuração</label><label><input type="checkbox" id="dc-link" ${d.link_enviado ? 'checked' : ''}> Link enviado</label><label><input type="checkbox" id="dc-docjur" ${d.doc_juridico_enviado ? 'checked' : ''}> Documento do jurídico enviado ao médico</label></div></div>`;
   const apply = () => {
     const q = norm($('#dc-q').value), f = $('#dc-f').value;
     $$('.doc-row', body).forEach((r) => {
@@ -362,7 +365,7 @@ function drawDocsTab(body, d) {
   $$('.doc-row input', body).forEach((c) => c.onchange = () => setDocs(d, [c.closest('.doc-row').dataset.doc], c.checked));
   $('#dc-all').onclick = () => setDocs(d, $$('.doc-row', body).filter((r) => !r.hidden && !r.classList.contains('done')).map((r) => r.dataset.doc), true);
   const tgl = (id, field, label) => { $(id).onchange = async (e) => { if (await updateDoctor(d, { [field]: e.target.checked }, `${label} ${e.target.checked ? 'marcado' : 'desmarcado'}`)) { await loadDoctorDetail(); drawMedico(); } }; };
-  tgl('#dc-app', 'app', 'APP'); tgl('#dc-proc', 'procuracao', 'Procuração'); tgl('#dc-link', 'link_enviado', 'Link enviado');
+  tgl('#dc-app', 'app', 'APP'); tgl('#dc-proc', 'procuracao', 'Procuração'); tgl('#dc-link', 'link_enviado', 'Link enviado'); tgl('#dc-docjur', 'doc_juridico_enviado', 'Documento do jurídico enviado ao médico');
 }
 async function setDocs(d, names, received) {
   if (!names.length) { toast('Nenhum documento pendente na lista filtrada.', ''); return; }

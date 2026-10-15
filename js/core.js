@@ -61,8 +61,8 @@ function urgenteAte() { const d = new Date(); d.setDate(d.getDate() + URGENTE_DI
 /** Nomes antigos de etapa (histórico do Lovable / antes da simplificação) → etapa atual. */
 const STAGE_ALIASES = {
   'Aguardando Contato': 'aguardando_contato', 'Aguardando Retorno Médico': 'aguardando_medico',
-  'Enviar Documentos Jurídico': 'aguardando_juridico', 'Aguardando Jurídico': 'aguardando_juridico', 'R3': 'em_espera',
-  'Documentação Pendente': 'documentacao_pendente', 'Em espera': 'em_espera', 'Documentação Recebida - Enviar Email': 'aguardando_hospital',
+  'Enviar Documentos Jurídico': 'aguardando_juridico', 'Aguardando Jurídico': 'aguardando_juridico', 'R3': 'aguardando_medico', 'Aguardando formação (R3)': 'aguardando_medico',
+  'Documentação Pendente': 'documentacao_pendente', 'Em espera': 'aguardando_medico', 'Documentação Recebida - Enviar Email': 'aguardando_hospital',
   'Aguardando Retorno Hospital': 'aguardando_hospital',
 };
 const SETOR_USUARIO = { cadastro: 'Cadastro', escalas: 'Escalas', juridico: 'Jurídico', marketing: 'Marketing', diretoria: 'Diretoria' };

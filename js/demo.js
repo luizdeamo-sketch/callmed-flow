@@ -23,7 +23,7 @@
   const STAGES = [
     ['aguardando_contato', 'Primeiro contato', '#8b8fa3', 24], ['aguardando_medico', 'Aguardando médico', '#c98a1b', 24],
     ['aguardando_juridico', 'Jurídico', '#7c6fd0', 24], ['documentacao_pendente', 'Documentação', '#d9822b', 24],
-    ['aguardando_hospital', 'Hospital', '#3463e0', 48], ['em_espera', 'Aguardando formação (R3)', '#9a9aa5', 9999],
+    ['aguardando_hospital', 'Hospital', '#3463e0', 48],
     ['aprovado', 'Aprovado', '#1f9d6b', 9999], ['reprovado', 'Reprovado', '#d0443a', 9999],
   ];
   const LABEL = Object.fromEntries(STAGES.map((s) => [s[0], s[1]]));
@@ -36,10 +36,9 @@
     documentacao_pendente: ['aguardando_contato', 'aguardando_medico', 'documentacao_pendente'],
     aguardando_juridico: ['aguardando_contato', 'aguardando_medico', 'documentacao_pendente', 'aguardando_juridico'],
     aguardando_hospital: ['aguardando_contato', 'aguardando_medico', 'documentacao_pendente', 'aguardando_hospital'],
-    em_espera: ['aguardando_contato', 'aguardando_medico', 'em_espera'],
     aprovado: ['aguardando_contato', 'aguardando_medico', 'documentacao_pendente', 'aguardando_hospital', 'aprovado'],
     reprovado: ['aguardando_contato', 'aguardando_medico', 'documentacao_pendente', 'aguardando_hospital', 'reprovado'] };
-  const MIX = [['aguardando_contato', 3], ['aguardando_medico', 10], ['documentacao_pendente', 7], ['aguardando_juridico', 3], ['aguardando_hospital', 8], ['em_espera', 2], ['aprovado', 6], ['reprovado', 1]];
+  const MIX = [['aguardando_contato', 3], ['aguardando_medico', 10], ['documentacao_pendente', 7], ['aguardando_juridico', 3], ['aguardando_hospital', 8], ['aprovado', 6], ['reprovado', 1]];
   const ymdL = (ms) => { const d = new Date(ms); return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`; };
 
   function buildDB() {
@@ -71,7 +70,7 @@
         const open = !['aprovado', 'reprovado'].includes(final);
         const urg = open && (n % 9 === 0);
         db.flow_doctors.push({
-          id, name, hospital: HOSPS[n % HOSPS.length], cpf: '', crm: `CRM/SP ${120000 + n * 37}`, estado: 'SP', status_especialidade: final === 'em_espera' ? 'R3' : pick(['FORMADO', 'FORMADO C/ RQE']),
+          id, name, hospital: HOSPS[n % HOSPS.length], cpf: '', crm: `CRM/SP ${120000 + n * 37}`, estado: 'SP', status_especialidade: n % 11 === 0 ? 'R3' : pick(['FORMADO', 'FORMADO C/ RQE']),
           setores: [SETS[n % SETS.length]], rqe: '', procuracao: rnd() > 0.5, disc: pick(['ADERENTE', 'ADERENTE', 'AGUARDANDO RETORNO']), medsimples: '', cobranca_medsimples: '',
           doc_pendente: final === 'documentacao_pendente' && k % 2 === 0 ? 'Diploma frente e verso' : '', dt_cobranca_doc: '', cobranca: '', dt_email_enviado: '', cobranca2: '', dt_resp_hospital: '',
           stage: final, priority: urg ? 'urgente' : 'rotina', urgente_ate: urg ? ymdL(NOW + 4 * DAY) : null, app: rnd() > 0.6, link_enviado: rnd() > 0.5, whatsapp: `1199${String(1000000 + n * 7919).slice(0, 7)}`,

@@ -137,7 +137,7 @@ function drawReports(acts, rqes) {
   const hospitals = uniq(S.doctors.map((d) => d.hospital)).sort();
   const opt = (v, l, cur) => `<option value="${esc(v)}" ${cur === v ? 'selected' : ''}>${esc(l)}</option>`;
   const slaF = (arr) => arr.filter((x) => !RF.slaStatus || x.status === RF.slaStatus).sort((a, b) => a.remaining - b.remaining);
-  const tabs = [['geral', 'Visão geral'], ['hosp', `Hospitais (${rep.hosp.length})`], ['form', 'Formação'], ['pipe', `SLA pipeline (${rep.slaItems.length})`], ['rqe', `SLA RQE (${rep.rqeItems.length})`], ['prod', 'Produtividade']];
+  const tabs = [['geral', 'Visão geral'], ['hosp', `Hospitais (${rep.hosp.length})`], ['form', 'Formação'], ['pipe', `SLA pipeline (${rep.slaItems.length})`], ['rqe', `SLA RQE (${rep.rqeItems.length})`], ['prod', 'Produtividade'], ['perdas', 'Motivos de perda']];
   let body = '';
   if (RF.tab === 'geral') {
     const max = Math.max(1, ...rep.stageAvg.map((x) => Math.max(x.avg, x.stage.sla_hours)));
@@ -146,6 +146,17 @@ function drawReports(acts, rqes) {
         <span class="b" style="position:relative"><i style="width:${(x.avg / max) * 100}%;background:${x.over ? 'var(--red)' : 'var(--brand)'}"></i><em style="position:absolute;top:-2px;bottom:-2px;left:${(x.stage.sla_hours / max) * 100}%;border-left:2px dashed var(--amber)"></em></span>
         <span class="n">${Math.round(x.avg)}h / ${x.stage.sla_hours >= 9999 ? 'sem SLA' : `SLA ${x.stage.sla_hours}h`} <span class="muted">(${x.n})</span></span></div>`).join('')}
       <div class="muted small">Linha tracejada = SLA da etapa. Barra vermelha = média acima do SLA.</div></div>`;
+  } else if (RF.tab === 'perdas') {
+    const reps = S.doctors.filter((d) => d.stage === 'reprovado' && (!RF.hospital || d.hospital === RF.hospital));
+    const cat = {};
+    reps.forEach((d) => { const k = d.motivo_reprovacao ? d.motivo_reprovacao.split(' — ')[0] : '(sem motivo — reprovados antes de 15/10)'; cat[k] = (cat[k] || 0) + 1; });
+    const lista = Object.entries(cat).sort((a, b) => b[1] - a[1]);
+    const max = Math.max(1, ...lista.map((x) => x[1]));
+    body = `<div class="panel"><h3>Por que perdemos médicos (${reps.length} reprovado(s)${RF.hospital ? ' · ' + esc(RF.hospital) : ''})</h3>
+      ${lista.map(([k, n]) => `<div class="hbar" style="grid-template-columns:300px 1fr 60px"><span class="t">${esc(k)}</span><span class="b"><i style="width:${(n / max) * 100}%;background:var(--red)"></i></span><span class="n">${n}</span></div>`).join('') || '<div class="empty">Nenhum reprovado.</div>'}
+      <div class="muted small">O motivo é obrigatório ao reprovar desde 15/10. Reprovados antes disso aparecem sem motivo.</div></div>
+      <table class="t" style="margin-top:12px"><thead><tr><th>Médico</th><th>Hospital</th><th>Motivo</th><th>Informado por</th><th>Desde</th></tr></thead><tbody>
+      ${reps.sort((a, b) => new Date(b.stage_entered_at) - new Date(a.stage_entered_at)).map((d) => `<tr class="clk" data-pd="${d.id}"><td>${esc(d.name)}</td><td>${esc(d.hospital)}</td><td>${esc(d.motivo_reprovacao || '—')}</td><td>${esc(d.reprovacao_origem || '—')}</td><td>${fmtDate(d.stage_entered_at)}</td></tr>`).join('')}</tbody></table>`;
   } else if (RF.tab === 'hosp') {
     body = `<table class="t"><thead><tr><th>Hospital</th><th>Total</th><th>No período</th><th>Aprovados</th><th>Reprovados</th><th>Em pipeline</th><th>Vencidos</th><th>Atenção</th><th>T. médio aprov.</th><th>SLA</th></tr></thead><tbody>
       ${rep.hosp.sort((a, b) => b.venc - a.venc || b.pipe - a.pipe).map((h) => `<tr><td><b>${esc(h.nome)}</b></td><td>${h.total}</td><td>${h.periodo}</td><td>${h.apr}</td><td>${h.rep}</td><td>${h.pipe}</td><td>${h.venc ? `<span class="tag r">${h.venc}</span>` : 0}</td><td>${h.aten}</td><td>${h.t.length ? Math.round(h.t.reduce((a, b) => a + b, 0) / h.t.length) + 'h' : '—'}</td><td>${h.pipe ? Math.round(((h.pipe - h.venc) / h.pipe) * 100) : 100}%</td></tr>`).join('')}</tbody></table>`;
@@ -294,3 +305,9 @@ async function exportHistorico(btn) {
   } catch (e) { toast('Erro ao exportar: ' + e.message, 'err'); }
   btn.disabled = false; btn.innerHTML = label;
 }
+
+// linhas de "Motivos de perda" abrem a ficha do médico
+document.addEventListener('click', (e) => {
+  const tr = e.target.closest('#view-relatorios [data-pd]');
+  if (tr) openDoctor(S.doctors.find((x) => x.id === tr.dataset.pd));
+});
