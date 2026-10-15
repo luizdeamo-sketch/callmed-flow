@@ -641,7 +641,11 @@ async function moveDoctor(d, toStage) {
   const patch = { stage: toStage, stage_entered_at: new Date().toISOString(), sla_hours: st?.sla_hours ?? 24 };
   // próxima ação sugerida para a nova etapa (encerrado = sem próxima ação; reprovado = comunicar o médico)
   if (rep) Object.assign(patch, { motivo_reprovacao: rep.motivo, reprovacao_origem: rep.origem, proxima_acao: rep.comunicar ? 'Informar resultado ao médico' : null, proxima_data: rep.comunicar ? ymdToday() : null, proximo_responsavel_id: rep.comunicar ? rep.resp : null });
-  else if (FINAL_STAGES.includes(toStage)) Object.assign(patch, { proxima_acao: null, proxima_data: null, proximo_responsavel_id: null });
+  else if (toStage === 'aprovado') {
+    // aprovado: avisar o médico (por padrão quem é do Jurídico; senão o responsável atual)
+    const jur = Object.values(S.profiles).find((p) => p.ativo && p.setor === 'juridico');
+    Object.assign(patch, { proxima_acao: 'Informar aprovação e próximos passos', proxima_data: ymdToday(), proximo_responsavel_id: jur ? jur.user_id : (d.proximo_responsavel_id || S.user.id) });
+  } else if (FINAL_STAGES.includes(toStage)) Object.assign(patch, { proxima_acao: null, proxima_data: null, proximo_responsavel_id: null });
   else if (ACAO_POR_ETAPA[toStage]) Object.assign(patch, { proxima_acao: ACAO_POR_ETAPA[toStage], proxima_data: addBusinessDays(1), proximo_responsavel_id: d.proximo_responsavel_id || S.user.id });
   const { error } = await sb.from('flow_doctors').update(patch).eq('id', d.id);
   if (error) { toast('Erro ao mover médico: ' + error.message, 'err'); return false; }

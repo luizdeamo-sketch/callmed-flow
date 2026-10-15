@@ -179,7 +179,7 @@
       await wait(k, 700);
       say('Cadastro · Camila', '…e mudar a etapa arrastando o card. A próxima ação da etapa nova já vem sugerida.');
       await drag(k, () => $(`.kcard[data-id="${newDoc().id}"]`), '.kanban-col[data-stage="aguardando_hospital"]');
-      say('Cadastro · Camila', 'O hospital aprovou? Arrasta para "Aprovado". O caso se encerra e sai da tela de trabalho.');
+      say('Cadastro · Camila', 'O hospital aprovou? Arrasta para "Aprovado". O sistema já cria a ação de avisar o médico; quando ela é feita, o caso se encerra.');
       await drag(k, () => $(`.kcard[data-id="${newDoc().id}"]`), '.kanban-col[data-stage="aprovado"]');
       await wait(k, 800);
     } },

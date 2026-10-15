@@ -4,7 +4,7 @@
 const ACOES = [
   'Fazer primeiro contato', 'Cobrar retorno do médico', 'Cobrar documentação pendente', 'Conferir documentos recebidos',
   'Verificar se já concluiu a residência', 'Enviar documentos ao jurídico', 'Cobrar retorno do jurídico', 'Enviar cadastro ao hospital (e-mail)',
-  'Cobrar retorno do hospital', 'Enviar link / APP', 'Coletar procuração', 'Informar resultado ao médico', 'Outra',
+  'Cobrar retorno do hospital', 'Enviar link / APP', 'Coletar procuração', 'Informar resultado ao médico', 'Informar aprovação e próximos passos', 'Outra',
 ];
 /** Ação sugerida automaticamente quando o médico entra em cada etapa. */
 const ACAO_POR_ETAPA = {
