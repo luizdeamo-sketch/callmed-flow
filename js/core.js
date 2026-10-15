@@ -65,7 +65,10 @@ const STAGE_ALIASES = {
   'Documentação Pendente': 'documentacao_pendente', 'Documentação Recebida - Enviar Email': 'aguardando_hospital',
   'Aguardando Retorno Hospital': 'aguardando_hospital',
 };
-const SETOR_USUARIO = { cadastro: 'Cadastro', escalas: 'Escalas', marketing: 'Marketing', diretoria: 'Diretoria' };
+const SETOR_USUARIO = { cadastro: 'Cadastro', escalas: 'Escalas', juridico: 'Jurídico', marketing: 'Marketing', diretoria: 'Diretoria' };
+/** Parecer jurídico do cadastro — só quem é do setor Jurídico registra (o banco também bloqueia). */
+const PARECER_JUR = { aprovado: ['Aprovado', 'ok'], aprovado_restricao: ['Aprovado com restrição', 'warn'], nao_aprovado: ['Não aprovado', 'bad'] };
+function isJuridico() { return S.profile?.setor === 'juridico'; }
 const REQUIRED_DOCUMENTS = [
   'Antecedente Criminal', 'ATLS/ACLS', 'Carta de Recomendação / Declaração de Experiência', 'Carteira de CRM - Frente e verso',
   'Carteira de vacinação', 'Carteira de vacinação COVID', 'Certidão de quitação do CREMESP', 'Certidão ético profissional do CREMESP',

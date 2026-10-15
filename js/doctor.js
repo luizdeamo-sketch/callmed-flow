@@ -184,6 +184,7 @@ function drawMedico() {
         ${d.crm ? `<span class="ptag">${esc(d.crm)}</span>` : ''}
         ${(d.setores || []).map((s) => `<span class="ptag">${esc(s)}</span>`).join('')}
         ${d.status_especialidade ? `<span class="ptag">${esc(d.status_especialidade)}</span>` : ''}
+        ${d.parecer_juridico ? `<span class="ptag ${PARECER_JUR[d.parecer_juridico][1] === 'ok' ? '' : PARECER_JUR[d.parecer_juridico][1]}" title="Parecer jurídico">Jurídico: ${PARECER_JUR[d.parecer_juridico][0]}</span>` : ''}
         <button class="ptag ${d.priority === 'urgente' ? 'bad' : d.priority === 'hospital_novo' ? 'warn' : ''}" id="pv-prio" style="cursor:pointer" title="Clique para alternar urgência (vale por 7 dias)">${PRIORITIES[d.priority] || d.priority}${d.priority === 'urgente' && d.urgente_ate ? ' até ' + fmtYmd(d.urgente_ate) : ''}</button>
       </div>
       <div class="person-actions">
@@ -252,6 +253,7 @@ function drawResumoTab(body, d) {
       <div class="astat"><span class="an">${contatos}</span><span class="al">Contatos / cobranças</span></div>
       ${d.created_by && S.profiles[d.created_by] ? `<div class="astat"><span class="an" style="font-size:1rem">${esc(S.profiles[d.created_by].display_name)}</span><span class="al">Cadastrado por${S.profiles[d.created_by].setor ? ' · ' + esc(SETOR_USUARIO[S.profiles[d.created_by].setor] || S.profiles[d.created_by].setor) : ''}</span></div>` : ''}
     </div>
+    ${parecerBox(d)}
     ${d.doc_pendente ? `<div class="es-box" style="background:var(--amber-soft);border-color:var(--amber-line)"><div class="ql" style="color:var(--amber-ink)">${ic('doc', 14)} Documento pendente</div>${esc(d.doc_pendente)}</div>` : ''}
     <div class="pv-grid">
       <div class="es-box"><div class="ql">Contato e cadastro</div><div class="core-fields">
@@ -270,6 +272,39 @@ function drawResumoTab(body, d) {
     ${d.observations ? `<div class="es-box"><div class="ql">Observações</div><div style="font-size:13.5px;line-height:1.55;white-space:pre-wrap">${esc(d.observations)}</div></div>` : ''}
     <div class="es-box"><div class="ql">Outros cadastros deste médico</div>${otherHospitals(d)}</div>`;
   $$('#pv-body [data-other]').forEach((a) => a.onclick = (e) => { e.preventDefault(); openDoctor(S.doctors.find((x) => x.id === a.dataset.other)); });
+  bindParecer(d);
+}
+
+/** Quadro do parecer jurídico: o Jurídico marca; os demais só veem. */
+function parecerBox(d) {
+  const p = PARECER_JUR[d.parecer_juridico];
+  const quem = d.parecer_juridico_por ? (S.profiles[d.parecer_juridico_por]?.display_name || 'Jurídico') : '';
+  const atual = p ? `<span class="tagx ${p[1]}">${p[0]}</span>${quem ? ` <span class="muted small">por ${esc(quem)} em ${fmtDate(d.parecer_juridico_em, true)}</span>` : ''}${d.parecer_juridico_obs ? `<div style="margin-top:8px;font-size:13.5px;white-space:pre-wrap">${esc(d.parecer_juridico_obs)}</div>` : ''}`
+    : '<span class="muted small">Ainda sem parecer.</span>';
+  if (!isJuridico()) return `<div class="es-box"><div class="ql">Parecer jurídico</div>${atual}<div class="hint">Somente o setor Jurídico registra o parecer.</div></div>`;
+  return `<div class="es-box"><div class="ql">Parecer jurídico</div>${atual}
+    <div class="seg-toggle" id="pj-opts" style="margin-top:12px">${Object.entries(PARECER_JUR).map(([k, [l]]) => `<button data-pj="${k}" class="${d.parecer_juridico === k ? 'active' : ''}">${l}</button>`).join('')}</div>
+    <textarea class="inp" id="pj-obs" rows="2" style="margin-top:10px" placeholder="Restrição ou motivo (obrigatório para Aprovado com restrição e Não aprovado)">${esc(d.parecer_juridico_obs || '')}</textarea>
+    <div style="display:flex;gap:8px;margin-top:8px;align-items:center"><button class="btn btn-primary btn-sm" id="pj-save">Salvar parecer</button>${d.parecer_juridico ? '<button class="btn-ghost" id="pj-clear" style="color:var(--ink-faint)">Limpar parecer</button>' : ''}</div></div>`;
+}
+function bindParecer(d) {
+  if (!isJuridico() || !$('#pj-save')) return;
+  let escolha = d.parecer_juridico || '';
+  $$('#pj-opts [data-pj]').forEach((b) => b.onclick = () => { escolha = b.dataset.pj; $$('#pj-opts [data-pj]').forEach((x) => x.classList.toggle('active', x === b)); });
+  $('#pj-save').onclick = async () => {
+    const obs = $('#pj-obs').value.trim();
+    if (!escolha) return toast('Escolha Aprovado, Aprovado com restrição ou Não aprovado.', 'err');
+    if (escolha !== 'aprovado' && obs.length < 3) { toast('Descreva a restrição ou o motivo.', 'err'); $('#pj-obs').focus(); return; }
+    if (escolha === d.parecer_juridico && obs === (d.parecer_juridico_obs || '')) return toast('Nada mudou no parecer.', '');
+    if (await updateDoctor(d, { parecer_juridico: escolha, parecer_juridico_obs: obs }, `Parecer jurídico: ${PARECER_JUR[escolha][0]}${obs ? ' — ' + obs : ''}`)) {
+      toast('Parecer jurídico registrado', 'ok'); await loadDoctorDetail(); drawMedico();
+    }
+  };
+  const clr = $('#pj-clear');
+  if (clr) clr.onclick = async () => {
+    if (!(await confirmDlg('Limpar parecer jurídico', 'O parecer atual será removido (fica registrado no histórico).', { okText: 'Limpar' }))) return;
+    if (await updateDoctor(d, { parecer_juridico: null, parecer_juridico_obs: '' }, 'Parecer jurídico removido')) { toast('Parecer removido', 'ok'); await loadDoctorDetail(); drawMedico(); }
+  };
 }
 function otherHospitals(d) {
   const nm = norm(d.name), crm = digits(d.crm);

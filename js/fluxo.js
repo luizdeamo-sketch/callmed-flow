@@ -239,7 +239,7 @@ const EXPORT_COLS = [
   ['priority', 'Prioridade', (d) => PRIORITIES[d.priority] || d.priority], ['entry', 'Entrada', (d) => fmtDate(d.entry_date)],
   ['acao', 'Próxima ação', (d) => d.proxima_acao || ''], ['acao_data', 'Data da ação', (d) => (d.proxima_data ? fmtYmd(d.proxima_data) : '')],
   ['acao_resp', 'Responsável', (d) => (d.proxima_acao ? respName(d.proximo_responsavel_id) : '')],
-  ['status_esp', 'Formação', (d) => d.status_especialidade], ['rqe', 'RQE', (d) => d.rqe], ['disc', 'DISC', (d) => DISC_LABEL[d.disc] || ''],
+  ['status_esp', 'Formação', (d) => d.status_especialidade], ['rqe', 'RQE', (d) => d.rqe], ['disc', 'DISC', (d) => DISC_LABEL[d.disc] || ''], ['parecer_jur', 'Parecer jurídico', (d) => (PARECER_JUR[d.parecer_juridico] || [''])[0]], ['parecer_jur_obs', 'Restrição / observação do jurídico', (d) => d.parecer_juridico_obs],
   ['app', 'APP', (d) => (d.app ? 'Sim' : 'Não')], ['proc', 'Procuração', (d) => (d.procuracao ? 'Sim' : 'Não')], ['link', 'Link enviado', (d) => (d.link_enviado ? 'Sim' : 'Não')],
   ['docs', 'Docs %', (d) => S.docProgress[d.id] || 0], ['doc_pend', 'Doc. pendente', (d) => d.doc_pendente],
   ['cobranca', 'Cobrança', (d) => d.cobranca], ['obs', 'Observações', (d) => d.observations],

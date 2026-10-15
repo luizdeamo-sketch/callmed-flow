@@ -461,3 +461,51 @@ update public.flow_stages s set label = v.label, position = v.pos, sla_hours = v
                ('reprovado','Reprovado',7,9999,'#d0443a')) as v(id,label,pos,sla,color)
  where s.id = v.id;
 update public.flow_doctors d set sla_hours = s.sla_hours from public.flow_stages s where s.id = d.stage and d.sla_hours <> s.sla_hours;
+
+-- ---------- migração 10 (15/10/2026): parecer jurídico (só o setor Jurídico registra) ----------
+alter table public.flow_doctors
+  add column if not exists parecer_juridico text check (parecer_juridico in ('aprovado','aprovado_restricao','nao_aprovado')),
+  add column if not exists parecer_juridico_obs text not null default '',
+  add column if not exists parecer_juridico_por uuid references auth.users(id) on delete set null,
+  add column if not exists parecer_juridico_em timestamptz;
+create or replace function public.flow_doctors_parecer_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_changed boolean;
+begin
+  v_changed := (tg_op = 'INSERT' and new.parecer_juridico is not null)
+    or (tg_op = 'UPDATE' and (new.parecer_juridico is distinct from old.parecer_juridico or new.parecer_juridico_obs is distinct from old.parecer_juridico_obs));
+  if v_changed then
+    if auth.uid() is not null and not exists (select 1 from public.flow_profiles where user_id = auth.uid() and setor = 'juridico' and ativo) then
+      raise exception 'Somente o Jurídico registra o parecer jurídico';
+    end if;
+    new.parecer_juridico_por := auth.uid();
+    new.parecer_juridico_em := now();
+  elsif tg_op = 'UPDATE' then
+    new.parecer_juridico_por := old.parecer_juridico_por;
+    new.parecer_juridico_em := old.parecer_juridico_em;
+  elsif tg_op = 'INSERT' and auth.uid() is not null then
+    new.parecer_juridico_por := null;
+    new.parecer_juridico_em := null;
+  end if;
+  return new;
+end $$;
+drop trigger if exists flow_doctors_parecer_guard on public.flow_doctors;
+create trigger flow_doctors_parecer_guard before insert or update on public.flow_doctors
+  for each row execute function public.flow_doctors_parecer_guard();
+revoke execute on function public.flow_doctors_parecer_guard() from public, anon, authenticated;
+-- setor passa a ser alterado só por administradores (senão qualquer um viraria "Jurídico")
+create or replace function public.flow_profiles_guard()
+returns trigger language plpgsql security definer set search_path = public as $$
+begin
+  if auth.uid() is null or public.flow_is_admin() then return new; end if;
+  if new.ativo is distinct from old.ativo or new.email is distinct from old.email then
+    raise exception 'Somente administradores alteram acesso ou e-mail';
+  end if;
+  if new.setor is distinct from old.setor then
+    raise exception 'Somente administradores alteram o setor';
+  end if;
+  if new.must_change_password and not old.must_change_password then
+    raise exception 'Não autorizado';
+  end if;
+  return new;
+end $$;
