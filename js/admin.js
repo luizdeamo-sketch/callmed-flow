@@ -69,7 +69,7 @@ VIEWS.usuarios = renderAdmin;
 function drawUsers() {
   const users = Object.values(S.profiles).sort((a, b) => Number(b.ativo) - Number(a.ativo) || a.display_name.localeCompare(b.display_name));
   $('#adm-body').innerHTML = `
-    <div class="toolbar"><button class="btn btn-primary btn-sm" id="u-new">＋ Novo usuário</button>
+    <div class="toolbar"><button class="btn btn-primary btn-sm" id="u-new">＋ Novo usuário</button><button class="btn btn-line btn-sm" id="u-bulk">${ic('users', 14)}Cadastrar vários</button>
       <span class="muted small">Novos usuários recebem uma senha provisória e são obrigados a trocá-la no primeiro acesso.</span></div>
     <div class="panel" style="padding:0;overflow:auto"><table class="t"><thead><tr><th>Nome</th><th>E-mail</th><th>Setor</th><th>Papel</th><th>Situação</th><th></th></tr></thead><tbody>
     ${users.map((u) => {
@@ -85,7 +85,74 @@ function drawUsers() {
           <button class="btn btn-line btn-sm" data-u="${u.user_id}" data-act="edit" aria-label="Editar">${ic('edit', 14)}</button></td></tr>`;
     }).join('')}</tbody></table></div>`;
   $('#u-new').onclick = () => userForm();
+  $('#u-bulk').onclick = () => bulkUsers();
   $$('[data-act]', $('#adm-body')).forEach((b) => b.onclick = () => userAction(b.dataset.u, b.dataset.act));
+}
+
+/** Cadastro em lote: cola "Nome - e-mail" (um por linha), escolhe o setor de cada um e cria todos. */
+function bulkUsers() {
+  const m = openModal(`
+    <div class="modal-head"><div><h2>Cadastrar vários usuários</h2><div class="om-sub">Cole um por linha: <b>Nome - e-mail</b> ou <b>Nome - e-mail - Setor</b>. Confira o setor antes de criar.</div></div><button class="x" data-close>✕</button></div>
+    <div class="modal-body" id="bu-body">
+      <textarea class="inp" id="bu-txt" rows="8" placeholder="Maria Silva - maria@callmedsaude.com.br"></textarea>
+    </div>
+    <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="bu-read">Conferir lista</button></div>`, { size: 'lg' });
+  const el = m.el;
+  let rows = [];
+  const setorSel = (i, v) => `<select class="inp" data-bs="${i}"><option value="">Selecione</option>${Object.entries(SETOR_USUARIO).map(([k, l]) => `<option value="${k}" ${v === k ? 'selected' : ''}>${l}</option>`).join('')}</select>`;
+  const drawRows = () => {
+    const existentes = new Set(Object.values(S.profiles).map((p) => (p.email || '').toLowerCase()));
+    $('#bu-body', el).innerHTML = `<table class="t"><thead><tr><th>Nome</th><th>E-mail</th><th>Setor</th><th>Admin</th><th></th></tr></thead><tbody>
+      ${rows.map((r, i) => `<tr><td><input class="inp" data-bn="${i}" value="${esc(r.name)}"></td><td>${esc(r.email)}${existentes.has(r.email) ? ' <span class="tag a">já tem acesso</span>' : ''}${r.ok ? '' : ' <span class="tag r">e-mail inválido</span>'}</td>
+        <td>${setorSel(i, r.setor)}</td><td><input type="checkbox" data-ba="${i}" ${r.admin ? 'checked' : ''}></td><td><button class="btn-ghost" data-bx="${i}" style="color:var(--ink-faint)">remover</button></td></tr>`).join('')}</tbody></table>
+      <div class="hint">Setor <b>Jurídico</b> é o único que registra o parecer jurídico. Cada pessoa recebe uma senha provisória e troca no primeiro acesso.</div>`;
+    $$('[data-bn]', el).forEach((x) => x.oninput = () => { rows[x.dataset.bn].name = x.value; });
+    $$('[data-bs]', el).forEach((x) => x.onchange = () => { rows[x.dataset.bs].setor = x.value; });
+    $$('[data-ba]', el).forEach((x) => x.onchange = () => { rows[x.dataset.ba].admin = x.checked; });
+    $$('[data-bx]', el).forEach((x) => x.onclick = () => { rows.splice(+x.dataset.bx, 1); drawRows(); });
+  };
+  $('#bu-read', el).onclick = async function () {
+    if (this.dataset.stage !== 'create') {
+      rows = $('#bu-txt', el).value.split(/\r?\n/).map((l) => l.trim()).filter(Boolean).map((l) => {
+        const email = (l.match(/[^\s<>;,]+@[^\s<>;,]+\.[^\s<>;,]+/) || [''])[0].toLowerCase();
+        // "Nome - e-mail - Setor": o setor (opcional) vem depois do e-mail
+        const [antes, depois = ''] = email ? l.split(new RegExp(email.replace(/[.*+?^${}()|[\]\\]/g, '\\$&'), 'i')) : [l, ''];
+        const setorTxt = norm(depois.replace(/[-–—;,|<>\t]/g, ' ').trim());
+        const setor = setorTxt ? (Object.keys(SETOR_USUARIO).find((k) => norm(SETOR_USUARIO[k]) === setorTxt || k === setorTxt) || '') : '';
+        const name = antes.replace(/\s*[-–—;,|<>\t]+\s*$/, '').trim();
+        return { name: sanitizeName(name), email, ok: /^\S+@\S+\.\S+$/.test(email), setor, admin: false };
+      });
+      if (!rows.length) return toast('Cole pelo menos uma linha.', 'err');
+      drawRows();
+      this.dataset.stage = 'create'; this.textContent = 'Criar todos';
+      return;
+    }
+    const todo = rows.filter((r) => r.ok && r.name.trim());
+    if (!todo.length) return toast('Nenhuma linha válida.', 'err');
+    const semSetor = todo.filter((r) => !r.setor).length;
+    if (semSetor && !(await confirmDlg('Usuários sem setor', `${semSetor} pessoa(s) estão sem setor. Criar mesmo assim? Dá para ajustar depois em Editar.`, { okText: 'Criar' }))) return;
+    this.disabled = true; this.textContent = 'Criando...';
+    const res = [];
+    for (const r of todo) {
+      try {
+        const out = await adminCall('create', { email: r.email, display_name: r.name.trim(), setor: r.setor, admin: r.admin });
+        res.push({ ...r, pass: out.temp_password || '', msg: out.temp_password ? 'criado' : 'já existia — liberado no Flow' });
+      } catch (e) { res.push({ ...r, pass: '', msg: 'erro: ' + e.message }); }
+    }
+    const link = location.origin + location.pathname;
+    const msgs = res.filter((r) => r.pass).map((r) => `CallMed Flow\n${link}\nE-mail: ${r.email}\nSenha provisória: ${r.pass}`);
+    $('#bu-body', el).innerHTML = `<p style="margin-top:0">Envie a cada pessoa por um canal <b>privado</b>. As senhas só aparecem agora; no primeiro acesso cada um define a própria.</p>
+      <table class="t"><thead><tr><th>Nome</th><th>E-mail</th><th>Setor</th><th>Senha provisória</th><th>Resultado</th></tr></thead><tbody>
+      ${res.map((r) => `<tr><td>${esc(r.name)}</td><td>${esc(r.email)}</td><td>${esc(SETOR_USUARIO[r.setor] || '—')}</td><td class="mono">${esc(r.pass || '—')}</td><td>${r.msg.startsWith('erro') ? `<span class="tag r">${esc(r.msg)}</span>` : `<span class="tag g">${esc(r.msg)}</span>`}</td></tr>`).join('')}</tbody></table>`;
+    this.remove();
+    const foot = $('.modal-foot', el);
+    if (msgs.length) {
+      const b = document.createElement('button'); b.className = 'btn btn-primary'; b.textContent = 'Copiar todas as mensagens';
+      b.onclick = () => { navigator.clipboard.writeText(msgs.join('\n\n')); toast('Copiado', 'ok'); };
+      foot.appendChild(b);
+    }
+    renderAdmin();
+  };
 }
 
 function showTempPassword(email, pass) {
