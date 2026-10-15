@@ -199,4 +199,4 @@ function drawHospitals() {
 
 // ---------- inicialização ----------
 if (/type=recovery/.test(location.hash)) passMode = 'recovery';
-boot();
+if (!window.FLOW_DEMO) boot(); // no modo demonstração (?demo) o js/demo.js assume
