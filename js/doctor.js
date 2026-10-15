@@ -24,7 +24,7 @@ function handoffOptions() {
 }
 function openNewDoctor() {
   const m = openModal(`
-    <div class="modal-head"><div><h2>Novo cadastro de médico</h2><div class="om-sub">Preencha o essencial — o time de Cadastro completa o resto depois.</div></div><button class="x" data-close>✕</button></div>
+    <div class="modal-head"><div><h2>Novo cadastro de médico</h2><div class="om-sub">Campos com * são obrigatórios; o resto o time de Cadastro pode completar depois.</div></div><button class="x" data-close>✕</button></div>
     <div class="modal-body">
       <div class="form-grid">
         <div class="field full"><label>Nome completo *</label><input class="inp" id="nd-name" placeholder="Dr. / Dra."></div>
@@ -33,23 +33,19 @@ function openNewDoctor() {
         <div class="field full"><label>Hospitais * <span class="muted">(1 cadastro por hospital)</span></label><div class="checks" id="nd-hosps"></div></div>
         <div class="full" id="nd-conflicts"></div>
         <div class="field full"><label>Setor *</label><div class="checks" id="nd-setores">${SETORES.map((s) => `<label><input type="checkbox" value="${esc(s)}"> ${esc(s)}</label>`).join('')}</div></div>
+        <div class="field"><label>Status especialidade</label><select class="inp" id="nd-status"><option value="">Selecione</option>${STATUS_ESP.map((s) => `<option>${s}</option>`).join('')}</select></div>
+        <div class="field"><label>RQE</label><input class="inp" id="nd-rqe"></div>
+        <div class="field"><label>DISC</label><select class="inp" id="nd-disc"><option value="">Selecione</option>${DISC.map((s) => `<option value="${esc(s)}">${esc(DISC_LABEL[s])}</option>`).join('')}</select></div>
+        <div class="field"><label>CPF</label><input class="inp" id="nd-cpf" placeholder="000.000.000-00"></div>
+        <div class="full switches">
+          <label><input type="checkbox" id="nd-med"> MedSimples</label>
+          <label><input type="checkbox" id="nd-proc"> Procuração</label>
+          <label><input type="checkbox" id="nd-app"> APP</label>
+        </div>
         <div class="field"><label>Prioridade</label><select class="inp" id="nd-prio">${Object.entries(PRIORITIES).map(([k, l]) => `<option value="${k}">${l}</option>`).join('')}</select></div>
         <div class="field"><label>Encaminhar para (quem vai acompanhar)</label><select class="inp" id="nd-resp">${handoffOptions()}</select></div>
-        <div class="field full"><label>Observações para o Cadastro</label><textarea class="inp" id="nd-obs" placeholder="Ex.: começa na escala de outubro, já mandou alguns documentos por WhatsApp..."></textarea></div>
+        <div class="field full"><label>Observações</label><textarea class="inp" id="nd-obs" placeholder="Ex.: começa na escala de outubro, já mandou alguns documentos por WhatsApp..."></textarea></div>
       </div>
-      <details class="nd-more"><summary>Mais detalhes (opcional)</summary>
-        <div class="form-grid" style="margin-top:10px">
-          <div class="field"><label>CPF</label><input class="inp" id="nd-cpf" placeholder="000.000.000-00"></div>
-          <div class="field"><label>Status especialidade</label><select class="inp" id="nd-status"><option value="">—</option>${STATUS_ESP.map((s) => `<option>${s}</option>`).join('')}</select></div>
-          <div class="field"><label>RQE</label><input class="inp" id="nd-rqe"></div>
-          <div class="field"><label>DISC</label><select class="inp" id="nd-disc"><option value="">—</option>${DISC.map((s) => `<option value="${esc(s)}">${esc(DISC_LABEL[s])}</option>`).join('')}</select></div>
-          <div class="full switches">
-            <label><input type="checkbox" id="nd-med"> MedSimples</label>
-            <label><input type="checkbox" id="nd-proc"> Procuração</label>
-            <label><input type="checkbox" id="nd-app"> APP</label>
-          </div>
-        </div>
-      </details>
       <div class="alert b small" id="nd-summary" hidden></div>
     </div>
     <div class="modal-foot"><span class="muted small" id="nd-missing" style="margin-right:auto;align-self:center"></span><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="nd-ok" disabled>Cadastrar e encaminhar</button></div>`);
