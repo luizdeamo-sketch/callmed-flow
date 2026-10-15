@@ -253,6 +253,7 @@ function drawResumoTab(body, d) {
       <div class="astat"><span class="an">${contatos}</span><span class="al">Contatos / cobranças</span></div>
       ${d.created_by && S.profiles[d.created_by] ? `<div class="astat"><span class="an" style="font-size:1rem">${esc(S.profiles[d.created_by].display_name)}</span><span class="al">Cadastrado por${S.profiles[d.created_by].setor ? ' · ' + esc(SETOR_USUARIO[S.profiles[d.created_by].setor] || S.profiles[d.created_by].setor) : ''}</span></div>` : ''}
     </div>
+    ${d.stage === 'reprovado' && d.motivo_reprovacao ? `<div class="es-box" style="border-left:3px solid var(--red)"><div class="ql">Motivo da reprovação</div><div style="font-size:13.5px;white-space:pre-wrap">${esc(d.motivo_reprovacao)}</div><div class="hint">Informado por: ${esc(d.reprovacao_origem || '—')}${d.proxima_acao ? ` · pendente: ${esc(d.proxima_acao)} (${esc(respName(d.proximo_responsavel_id))})` : ' · médico já comunicado'}</div></div>` : ''}
     ${parecerBox(d)}
     ${d.doc_pendente ? `<div class="es-box" style="background:var(--amber-soft);border-color:var(--amber-line)"><div class="ql" style="color:var(--amber-ink)">${ic('doc', 14)} Documento pendente</div>${esc(d.doc_pendente)}</div>` : ''}
     <div class="pv-grid">

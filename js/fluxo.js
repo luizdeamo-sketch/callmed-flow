@@ -239,7 +239,7 @@ const EXPORT_COLS = [
   ['priority', 'Prioridade', (d) => PRIORITIES[d.priority] || d.priority], ['entry', 'Entrada', (d) => fmtDate(d.entry_date)],
   ['acao', 'Próxima ação', (d) => d.proxima_acao || ''], ['acao_data', 'Data da ação', (d) => (d.proxima_data ? fmtYmd(d.proxima_data) : '')],
   ['acao_resp', 'Responsável', (d) => (d.proxima_acao ? respName(d.proximo_responsavel_id) : '')],
-  ['status_esp', 'Formação', (d) => d.status_especialidade], ['rqe', 'RQE', (d) => d.rqe], ['disc', 'DISC', (d) => DISC_LABEL[d.disc] || ''], ['parecer_jur', 'Parecer jurídico', (d) => (PARECER_JUR[d.parecer_juridico] || [''])[0]], ['parecer_jur_obs', 'Restrição / observação do jurídico', (d) => d.parecer_juridico_obs],
+  ['status_esp', 'Formação', (d) => d.status_especialidade], ['rqe', 'RQE', (d) => d.rqe], ['disc', 'DISC', (d) => DISC_LABEL[d.disc] || ''], ['parecer_jur', 'Parecer jurídico', (d) => (PARECER_JUR[d.parecer_juridico] || [''])[0]], ['parecer_jur_obs', 'Restrição / observação do jurídico', (d) => d.parecer_juridico_obs], ['motivo_rep', 'Motivo da reprovação', (d) => d.motivo_reprovacao], ['origem_rep', 'Reprovação informada por', (d) => d.reprovacao_origem],
   ['app', 'APP', (d) => (d.app ? 'Sim' : 'Não')], ['proc', 'Procuração', (d) => (d.procuracao ? 'Sim' : 'Não')], ['link', 'Link enviado', (d) => (d.link_enviado ? 'Sim' : 'Não')],
   ['docs', 'Docs %', (d) => S.docProgress[d.id] || 0], ['doc_pend', 'Doc. pendente', (d) => d.doc_pendente],
   ['cobranca', 'Cobrança', (d) => d.cobranca], ['obs', 'Observações', (d) => d.observations],
@@ -636,20 +636,55 @@ function renderBoard(list) {
 /** Move o médico de etapa e registra no histórico (o banco gera as notificações). */
 async function moveDoctor(d, toStage) {
   const st = stageById(toStage);
+  let rep = null;
+  if (toStage === 'reprovado') { rep = await reprovacaoDialog(d); if (!rep) return false; }
   const patch = { stage: toStage, stage_entered_at: new Date().toISOString(), sla_hours: st?.sla_hours ?? 24 };
-  // próxima ação sugerida para a nova etapa (encerrado = sem próxima ação)
-  if (FINAL_STAGES.includes(toStage)) Object.assign(patch, { proxima_acao: null, proxima_data: null, proximo_responsavel_id: null });
+  // próxima ação sugerida para a nova etapa (encerrado = sem próxima ação; reprovado = comunicar o médico)
+  if (rep) Object.assign(patch, { motivo_reprovacao: rep.motivo, reprovacao_origem: rep.origem, proxima_acao: rep.comunicar ? 'Informar resultado ao médico' : null, proxima_data: rep.comunicar ? ymdToday() : null, proximo_responsavel_id: rep.comunicar ? rep.resp : null });
+  else if (FINAL_STAGES.includes(toStage)) Object.assign(patch, { proxima_acao: null, proxima_data: null, proximo_responsavel_id: null });
   else if (ACAO_POR_ETAPA[toStage]) Object.assign(patch, { proxima_acao: ACAO_POR_ETAPA[toStage], proxima_data: addBusinessDays(1), proximo_responsavel_id: d.proximo_responsavel_id || S.user.id });
   const { error } = await sb.from('flow_doctors').update(patch).eq('id', d.id);
   if (error) { toast('Erro ao mover médico: ' + error.message, 'err'); return false; }
   Object.assign(d, patch);
   const { data: act } = await sb.from('flow_activities').insert({ doctor_id: d.id, description: `Movido para ${st?.label || toStage}`, type: 'stage_change' }).select().single();
   if (STAGE_EV && act) (STAGE_EV[d.id] ||= []).push({ at: new Date(act.created_at), stage: toStage });
+  if (rep) await sb.from('flow_activities').insert({ doctor_id: d.id, type: 'note', description: `Motivo da reprovação: ${rep.motivo} (informado por: ${rep.origem})${rep.comunicar ? ` · comunicar o médico: ${respName(rep.resp)}` : ''}` });
   if (typeof ACTS !== 'undefined') ACTS = null;
   notifyPainel(d, toStage);
   toast(`${d.name} → ${st?.label || toStage}`, 'ok');
   afterDoctorChange();
   return true;
+}
+
+const MOTIVOS_REPROVACAO = ['Reprovado pelo jurídico', 'Reprovado pelo hospital', 'Documentação incompleta ou vencida', 'Pendência no CRM / ético-profissional', 'Médico desistiu', 'Sem retorno do médico', 'Outro'];
+/** Janela obrigatória ao reprovar: motivo, quem informou e quem comunica o médico. Resolve com os dados ou null (cancelado). */
+function reprovacaoDialog(d) {
+  return new Promise((resolve) => {
+    let done = false;
+    const pessoas = Object.values(S.profiles).filter((p) => p.ativo).sort((a, b) => a.display_name.localeCompare(b.display_name));
+    const jur = pessoas.find((p) => p.setor === 'juridico');
+    const respDef = jur ? jur.user_id : (d.proximo_responsavel_id || S.user.id);
+    const m = openModal(`
+      <div class="modal-head"><div><h2>Reprovar ${esc(d.name)}</h2><div class="om-sub">${esc(d.hospital)} · registre o porquê e quem vai avisar o médico</div></div><button class="x" data-close>✕</button></div>
+      <div class="modal-body"><div class="form-grid">
+        <div class="field"><label>Motivo *</label><select class="inp" id="rp-mot"><option value="">Selecione</option>${MOTIVOS_REPROVACAO.map((x) => `<option>${esc(x)}</option>`).join('')}</select></div>
+        <div class="field"><label>Quem informou *</label><select class="inp" id="rp-org"><option value="">Selecione</option>${['Jurídico', 'Hospital', 'Médico', 'Equipe interna'].map((x) => `<option>${x}</option>`).join('')}</select></div>
+        <div class="field full"><label>Detalhes *</label><textarea class="inp" id="rp-det" rows="3" placeholder="Ex.: hospital recusou por falta de RQE em anestesiologia"></textarea></div>
+        <div class="field full"><label class="small" style="display:flex;gap:8px;align-items:center;text-transform:none;letter-spacing:0;font-size:13px;color:var(--ink)"><input type="checkbox" id="rp-com" checked> Criar a ação "Informar resultado ao médico" para hoje</label></div>
+        <div class="field full" id="rp-resp-w"><label>Quem comunica o médico</label><select class="inp" id="rp-resp">${pessoas.map((p) => `<option value="${p.user_id}" ${p.user_id === respDef ? 'selected' : ''}>${esc(p.display_name)}${p.setor ? ' · ' + esc(SETOR_USUARIO[p.setor] || p.setor) : ''}</option>`).join('')}</select></div>
+      </div><div class="err" id="rp-err"></div></div>
+      <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-danger" id="rp-ok">Reprovar</button></div>`,
+    { size: 'sm', onClose: () => { if (!done) resolve(null); } });
+    const el = m.el;
+    $('#rp-com', el).onchange = (e) => { $('#rp-resp-w', el).hidden = !e.target.checked; };
+    $('#rp-ok', el).onclick = () => {
+      const mot = $('#rp-mot', el).value, org = $('#rp-org', el).value, det = $('#rp-det', el).value.trim();
+      const falta = [!mot && 'motivo', !org && 'quem informou', det.length < 5 && 'detalhes'].filter(Boolean);
+      if (falta.length) { $('#rp-err', el).textContent = 'Falta: ' + falta.join(', ') + '.'; return; }
+      done = true; m.close();
+      resolve({ motivo: `${mot} — ${det}`, origem: org, comunicar: $('#rp-com', el).checked, resp: $('#rp-resp', el).value });
+    };
+  });
 }
 
 /** Aviso ao Painel CallMed Connect (WhatsApp automático). Só roda se a integração estiver configurada. */

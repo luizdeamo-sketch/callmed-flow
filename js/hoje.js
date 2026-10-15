@@ -3,7 +3,7 @@
 
 const ACOES = [
   'Fazer primeiro contato', 'Cobrar retorno do médico', 'Cobrar documentação pendente', 'Conferir documentos recebidos',
-  'Verificar se já pode seguir', 'Enviar documentos ao jurídico', 'Cobrar retorno do jurídico', 'Enviar cadastro ao hospital (e-mail)',
+  'Verificar se já concluiu a residência', 'Enviar documentos ao jurídico', 'Cobrar retorno do jurídico', 'Enviar cadastro ao hospital (e-mail)',
   'Cobrar retorno do hospital', 'Enviar link / APP', 'Coletar procuração', 'Informar resultado ao médico', 'Outra',
 ];
 /** Ação sugerida automaticamente quando o médico entra em cada etapa. */
@@ -13,7 +13,7 @@ const ACAO_POR_ETAPA = {
   aguardando_juridico: 'Enviar documentos ao jurídico',
   documentacao_pendente: 'Cobrar documentação pendente',
   aguardando_hospital: 'Enviar cadastro ao hospital (e-mail)',
-  em_espera: 'Verificar se já pode seguir',
+  em_espera: 'Verificar se já concluiu a residência',
 };
 
 // ---------- datas ----------
@@ -59,7 +59,7 @@ function nextInline(d) {
 function nextCounts(onlyMine) {
   let late = 0, hoje = 0, sem = 0;
   S.doctors.forEach((d) => {
-    if (!isOpen(d)) return;
+    if (!isOpen(d) && !d.proxima_acao) return; // encerrado só conta se ainda tem ação (ex.: comunicar o médico)
     if (!d.proxima_acao) { if (!onlyMine) sem++; return; }
     if (onlyMine && d.proximo_responsavel_id !== S.user.id) return;
     const n = daysTo(d.proxima_data);
@@ -168,7 +168,7 @@ function renderHoje() {
     const me = S.user.id;
     { const mc = nextCounts(true); const hb = $('#rail-hoje-n'); if (hb) { hb.hidden = !(mc.late + mc.hoje); hb.textContent = mc.late + mc.hoje; } }
     const open = S.doctors.filter(isOpen);
-    const acoes = open.filter((d) => d.proxima_acao && daysTo(d.proxima_data) !== null && daysTo(d.proxima_data) <= 0 && (!HJ.onlyMine || d.proximo_responsavel_id === me))
+    const acoes = S.doctors.filter((d) => d.proxima_acao && daysTo(d.proxima_data) !== null && daysTo(d.proxima_data) <= 0 && (!HJ.onlyMine || d.proximo_responsavel_id === me))
       .sort((a, b) => String(a.proxima_data).localeCompare(String(b.proxima_data)));
     const semAcao = open.filter((d) => !d.proxima_acao).sort((a, b) => doctorSla(a).remaining - doctorSla(b).remaining);
     const slaHoje = open.filter((d) => { const s = doctorSla(d); return s.status === 'warning'; }).sort((a, b) => doctorSla(a).remaining - doctorSla(b).remaining);

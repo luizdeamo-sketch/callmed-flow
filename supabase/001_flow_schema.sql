@@ -509,3 +509,9 @@ begin
   end if;
   return new;
 end $$;
+
+-- ---------- migração 11 (15/10/2026): motivo da reprovação + etapa R3 com nome claro ----------
+alter table public.flow_doctors
+  add column if not exists motivo_reprovacao text not null default '',
+  add column if not exists reprovacao_origem text not null default '';
+update public.flow_stages set label = 'Aguardando formação (R3)' where id = 'em_espera';

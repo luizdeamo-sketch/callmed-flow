@@ -62,7 +62,7 @@ function urgenteAte() { const d = new Date(); d.setDate(d.getDate() + URGENTE_DI
 const STAGE_ALIASES = {
   'Aguardando Contato': 'aguardando_contato', 'Aguardando Retorno Médico': 'aguardando_medico',
   'Enviar Documentos Jurídico': 'aguardando_juridico', 'Aguardando Jurídico': 'aguardando_juridico', 'R3': 'em_espera',
-  'Documentação Pendente': 'documentacao_pendente', 'Documentação Recebida - Enviar Email': 'aguardando_hospital',
+  'Documentação Pendente': 'documentacao_pendente', 'Em espera': 'em_espera', 'Documentação Recebida - Enviar Email': 'aguardando_hospital',
   'Aguardando Retorno Hospital': 'aguardando_hospital',
 };
 const SETOR_USUARIO = { cadastro: 'Cadastro', escalas: 'Escalas', juridico: 'Jurídico', marketing: 'Marketing', diretoria: 'Diretoria' };

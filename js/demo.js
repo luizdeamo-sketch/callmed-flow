@@ -23,7 +23,7 @@
   const STAGES = [
     ['aguardando_contato', 'Primeiro contato', '#8b8fa3', 24], ['aguardando_medico', 'Aguardando médico', '#c98a1b', 24],
     ['aguardando_juridico', 'Jurídico', '#7c6fd0', 24], ['documentacao_pendente', 'Documentação', '#d9822b', 24],
-    ['aguardando_hospital', 'Hospital', '#3463e0', 48], ['em_espera', 'Em espera', '#9a9aa5', 9999],
+    ['aguardando_hospital', 'Hospital', '#3463e0', 48], ['em_espera', 'Aguardando formação (R3)', '#9a9aa5', 9999],
     ['aprovado', 'Aprovado', '#1f9d6b', 9999], ['reprovado', 'Reprovado', '#d0443a', 9999],
   ];
   const LABEL = Object.fromEntries(STAGES.map((s) => [s[0], s[1]]));
