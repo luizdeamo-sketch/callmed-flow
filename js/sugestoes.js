@@ -2,11 +2,10 @@
 'use strict';
 
 const SG_STATUS = [['nova', 'Nova', '#0018fc'], ['em_analise', 'Em análise', '#c8790b'], ['aprovada', 'Aprovada', '#149c6b'], ['em_execucao', 'Em execução', '#7b3fe4'], ['concluida', 'Concluída', '#2f9e57'], ['rejeitada', 'Rejeitada', '#c23636'], ['depois', 'Deixar para depois', '#8990a3']];
-const SG_TIPOS = { ideia: 'Ideia nova', melhoria: 'Melhoria', problema: 'Problema / erro' };
+const SG_TIPOS = { ideia: 'Ideia nova', melhoria: 'Melhoria', problema: 'Problema / erro', duvida: 'Dúvida' };
 const SG_TELAS = ['Fluxo — Jornada', 'Fluxo — Kanban', 'Ficha do médico', 'Novo médico', 'Cobranças / mensagens', 'Indicadores', 'RQE', 'Relatórios', 'Auditoria', 'Administração', 'Notificações', 'Login / acesso', 'Outro'];
 const SG = { list: [], filter: '', q: '', files: [], rec: null, media: null, chunks: [], audioBlob: null, recording: false, voz: false };
 const sgLabel = (k) => SG_STATUS.find((s) => s[0] === k) || [k, k, '#666'];
-const SG_SR = window.SpeechRecognition || window.webkitSpeechRecognition;
 
 // ---------- armazenamento (bucket privado flow-docs) ----------
 async function docsUpload(file, pasta) {
@@ -156,45 +155,21 @@ function sgAddFiles(list) {
 }
 
 /** Ditado por voz (transcreve no campo) + grava o áudio original para anexar. */
+/** Ditado + áudio: usa a mesma peça do balão 💬 (js/acompanhante.js). */
 async function sgMicToggle() {
   const btn = $('#sg-mic'), st = $('#sg-mic-st'), ta = $('#sg-text');
   if (SG.recording) {
     SG.recording = false;
-    try { SG.rec && SG.rec.stop(); } catch (_) { /* já parado */ }
-    try { if (SG.media && SG.media.state !== 'inactive') SG.media.stop(); } catch (_) { /* já parado */ }
+    Ditado.parar();
     btn.innerHTML = ic('mic', 14) + 'Gravar / ditar'; btn.classList.remove('rec'); st.textContent = '';
     return;
   }
-  if (!SG_SR) { toast('Este navegador não faz ditado por voz. Use o Chrome ou o Edge.', 'err'); return; }
-  const base = ta.value ? ta.value.replace(/\s+$/, '') + '\n' : '';
-  SG.audioBlob = null; SG.chunks = [];
-  try {
-    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-    SG.media = new MediaRecorder(stream);
-    SG.media.ondataavailable = (e) => { if (e.data.size) SG.chunks.push(e.data); };
-    SG.media.onstop = () => {
-      stream.getTracks().forEach((t) => t.stop());
-      SG.audioBlob = new Blob(SG.chunks, { type: SG.media.mimeType || 'audio/webm' });
-      const p = $('#sg-audio-prev'); p.src = URL.createObjectURL(SG.audioBlob); p.hidden = false;
-    };
-    SG.media.start();
-  } catch (_) { SG.media = null; }
-  const rec = new SG_SR();
-  rec.lang = 'pt-BR'; rec.continuous = true; rec.interimResults = true;
-  SG.rec = rec;
-  let fin = '';
-  rec.onresult = (ev) => {
-    let interim = '';
-    for (let i = ev.resultIndex; i < ev.results.length; i++) {
-      const t = ev.results[i][0].transcript;
-      if (ev.results[i].isFinal) fin += t + ' '; else interim += t;
-    }
-    ta.value = base + fin + interim;
-    SG.voz = true;
-  };
-  rec.onerror = (ev) => { if (ev.error === 'not-allowed') toast('Permita o uso do microfone no navegador.', 'err'); };
-  rec.onend = () => { if (SG.recording) { try { rec.start(); } catch (_) { /* reinício */ } } };
-  rec.start();
+  SG.audioBlob = null;
+  const ok = await Ditado.iniciar(ta, {
+    onTexto: () => { SG.voz = true; },
+    onAudio: (blob) => { SG.audioBlob = blob; const p = $('#sg-audio-prev'); if (p) { p.src = URL.createObjectURL(blob); p.hidden = false; } },
+  });
+  if (!ok) return;
   SG.recording = true;
   btn.textContent = 'Parar'; btn.classList.add('rec'); st.textContent = '🔴 ouvindo... fale e depois clique em Parar';
 }

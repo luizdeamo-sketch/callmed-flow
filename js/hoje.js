@@ -155,11 +155,13 @@ function renderHoje() {
   const h = new Date().getHours();
   const nome = (S.profile.display_name || '').split(' ')[0];
   root.innerHTML = `<div class="hj-page">
+    <div id="ac-card-slot"></div>
     <div class="pg-head"><div><div class="sub" style="margin-bottom:2px">${new Date().toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: 'long' })}</div>
       <h2 style="font-size:1.5rem">${h < 12 ? 'Bom dia' : h < 18 ? 'Boa tarde' : 'Boa noite'}${nome ? ', ' + esc(nome) : ''}</h2></div>
       <div class="right"><button class="btn btn-primary" id="hj-new">${ic('plus', 15)}Novo médico</button></div></div>
     <div id="hj-body"><div class="op-more">Carregando...</div></div></div>`;
   $('#hj-new', root).onclick = () => openNewDoctor();
+  if (window.ACOMP && ACOMP.cartao) ACOMP.cartao($('#ac-card-slot', root));
   const m = { el: root, close() {} };
   const draw = async () => {
     const body = $('#hj-body', m.el);

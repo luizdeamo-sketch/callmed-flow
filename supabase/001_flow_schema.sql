@@ -549,3 +549,30 @@ drop trigger if exists flow_doctors_parecer_notify on public.flow_doctors;
 create trigger flow_doctors_parecer_notify after update of parecer_juridico on public.flow_doctors
   for each row execute function public.flow_doctors_parecer_notify();
 revoke execute on function public.flow_doctors_parecer_notify() from public, anon, authenticated;
+
+-- ---------- migração 13 (16/10/2026): registro de uso + contexto do balão 💬 nas sugestões ----------
+-- (a tabela uso_eventos deste banco é de outro sistema; a do Flow tem o prefixo flow_)
+create table if not exists public.flow_uso_eventos (
+  id bigint generated always as identity primary key,
+  em timestamptz not null default now(),
+  user_id uuid default auth.uid(),
+  email text default coalesce(auth.jwt() ->> 'email', ''),
+  sessao text,
+  tipo text not null check (tipo in ('tela','clique','raiva','erro','aviso','saida','balao')),
+  rota text,
+  alvo text check (char_length(coalesce(alvo, '')) <= 200),
+  detalhe jsonb
+);
+create index if not exists flow_uso_eventos_em_idx on public.flow_uso_eventos (em desc);
+alter table public.flow_uso_eventos enable row level security;
+revoke all on public.flow_uso_eventos from anon, authenticated;
+grant insert on public.flow_uso_eventos to authenticated;
+create policy "uso: o app so insere" on public.flow_uso_eventos for insert to authenticated
+  with check (user_id = (select auth.uid())
+    and email = coalesce((select auth.jwt()) ->> 'email', '')
+    and char_length(coalesce(alvo, '')) <= 200
+    and public.flow_is_member((select auth.uid())));
+-- sem política de leitura: ninguém lê pelo app; o relatório lê pelo banco
+alter table public.flow_sugestoes add column if not exists contexto jsonb;
+alter table public.flow_sugestoes drop constraint if exists flow_sugestoes_tipo_check;
+alter table public.flow_sugestoes add constraint flow_sugestoes_tipo_check check (tipo in ('ideia','melhoria','problema','duvida'));
