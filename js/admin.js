@@ -2,6 +2,7 @@
 'use strict';
 
 let adminTab = 'usuarios';
+const HF = { q: '' };
 
 async function adminCall(action, payload) {
   const { data, error } = await sb.functions.invoke('flow-admin', { body: { action, ...payload } });
@@ -225,23 +226,106 @@ async function userAction(uid, act) {
   } catch (e) { toast(e.message, 'err'); }
 }
 
-function drawHospitals() {
+/** Nome "de comparação": sem acento, sem "Hospital/Hosp./H." e sem pontuação, para achar cadastro repetido. */
+function hospChave(n) {
+  return norm(n).replace(/\b(hospital|hosp|h|maternidade|unidade|e|de|do|da|dos|das)\b\.?/g, ' ').replace(/[^a-z0-9]/g, '');
+}
+function hospParecido(nome) {
+  const k = hospChave(nome);
+  if (!k) return null;
+  return S.hospitals.find((h) => { const hk = hospChave(h.nome); return hk === k || (k.length >= 5 && (hk.includes(k) || k.includes(hk))); }) || null;
+}
+/** Cadastra um hospital (só administrador). Retorna o nome gravado ou null. */
+async function criarHospital(nomeDigitado) {
+  const nome = String(nomeDigitado || '').replace(/\s+/g, ' ').trim();
+  if (nome.length < 3) { toast('Digite o nome do hospital (pelo menos 3 letras).', 'err'); return null; }
+  const igual = S.hospitals.find((h) => norm(h.nome) === norm(nome));
+  if (igual) { toast(`"${igual.nome}" já está na lista${igual.ativo ? '' : ' (inativo: reative em Admin → Hospitais)'}.`, 'err'); return null; }
+  const par = hospParecido(nome);
+  if (par && !(await confirmDlg('Nome parecido', `Já existe "${par.nome}". É outro hospital mesmo? Se for o mesmo, use o que já existe para não duplicar.`, { okText: 'É outro, cadastrar' }))) return null;
+  const { error } = await sb.from('flow_hospitals').insert({ nome });
+  if (error) { toast(error.code === '23505' ? 'Esse hospital já existe.' : friendlyDbError(error, 'Erro ao cadastrar hospital'), 'err'); return null; }
+  S.hospitals.push({ nome, ativo: true, created_at: new Date().toISOString() });
+  S.hospitals.sort((x, y) => x.nome.localeCompare(y.nome));
+  toast(`Hospital "${nome}" cadastrado`, 'ok');
+  return nome;
+}
+/** Janela "Hospital não está na lista?": administrador cadastra; os demais pedem para um administrador. */
+function hospitalNovoDialog({ onCriado } = {}) {
+  const admins = Object.values(S.profiles).filter((p) => p.ativo && (S.roles[p.user_id] || []).includes('admin')).map((p) => p.display_name);
+  const quem = admins.length ? admins.join(', ') : 'um administrador';
+  const m = openModal(`
+    <div class="modal-head"><div><h2>${S.isAdmin ? 'Cadastrar hospital' : 'Pedir hospital novo'}</h2><div class="om-sub">${S.isAdmin ? 'Você é administrador: o hospital entra na lista na hora.' : `Quem cadastra hospitais: ${esc(quem)}. Eles recebem seu pedido no sino.`}</div></div><button class="x" data-close>✕</button></div>
+    <div class="modal-body">
+      <div class="field"><label>Nome do hospital</label><input class="inp" id="hn-nome" placeholder="Ex.: Hospital São Luiz Morumbi"></div>
+      <div class="hint" id="hn-par"></div>
+      ${S.isAdmin ? '' : '<div class="field"><label>Observação (opcional)</label><input class="inp" id="hn-obs" placeholder="Ex.: operação nova que começa em novembro"></div>'}
+    </div>
+    <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="hn-ok">${S.isAdmin ? 'Cadastrar' : 'Enviar pedido'}</button></div>`, { size: 'sm' });
+  const el = m.el;
+  $('#hn-nome', el).oninput = (e) => { const p = hospParecido(e.target.value); $('#hn-par', el).innerHTML = p ? `Parecido com <b>${esc(p.nome)}</b>${p.ativo ? '' : ' (inativo)'}: confira se não é o mesmo.` : ''; };
+  setTimeout(() => $('#hn-nome', el).focus(), 50);
+  $('#hn-ok', el).onclick = async () => {
+    const nome = $('#hn-nome', el).value.trim();
+    if (S.isAdmin) {
+      const criado = await criarHospital(nome);
+      if (criado) { m.close(); onCriado && onCriado(criado); }
+      return;
+    }
+    if (nome.length < 3) { toast('Digite o nome do hospital (pelo menos 3 letras).', 'err'); return; }
+    const { error } = await sb.from('flow_hospital_pedidos').insert({ nome, obs: $('#hn-obs', el).value.trim(), pedido_por: S.user.id });
+    if (error) return toast(friendlyDbError(error, 'Erro ao enviar o pedido'), 'err');
+    m.close(); toast('Pedido enviado. Você recebe um aviso quando o hospital entrar na lista.', 'ok');
+  };
+}
+
+async function drawHospitals() {
   const counts = {};
   S.doctors.forEach((d) => { counts[d.hospital] = (counts[d.hospital] || 0) + 1; });
+  const admins = Object.values(S.profiles).filter((p) => p.ativo && (S.roles[p.user_id] || []).includes('admin')).map((p) => p.display_name);
+  const { data: pedidos } = await sb.from('flow_hospital_pedidos').select('*').eq('status', 'pendente').order('created_at', { ascending: true });
+  const q = norm(HF.q);
+  const lista = S.hospitals.filter((h) => !q || norm(h.nome).includes(q));
   $('#adm-body').innerHTML = `
+    <div class="alert b" style="margin:0 0 14px"><b>Quem pode incluir, renomear, inativar ou excluir hospitais:</b> os administradores do Flow (${esc(admins.join(', ') || '—')}).
+      Os demais pedem pelo cadastro do médico, no link "Hospital não está na lista?". Para dar essa permissão a alguém, use <b>Tornar admin</b> na aba Usuários.</div>
+    ${(pedidos || []).length ? `<div class="es-box"><div class="ql">Pedidos de hospital novo <span class="tagx warn">${pedidos.length}</span></div>
+      ${pedidos.map((p) => `<div class="hj-row"><b>${esc(p.nome)}</b> <small class="muted">· pedido por ${esc(p.pedido_por_nome || '—')} em ${fmtDate(p.created_at, true)}${p.obs ? ' · ' + esc(p.obs) : ''}</small>
+        <span class="hj-right"><button class="btn btn-primary btn-sm" data-pcriar="${p.id}">Cadastrar</button><button class="btn btn-line btn-sm" data-precusar="${p.id}">Recusar</button></span></div>`).join('')}</div>` : ''}
     <div class="toolbar"><input class="inp" id="h-new" placeholder="Nome do novo hospital" style="width:320px"><button class="btn btn-primary btn-sm" id="h-add">＋ Adicionar</button>
-      <span class="muted small">Renomear atualiza todos os médicos daquele hospital. Hospitais inativos somem das listas de cadastro, mas o histórico fica.</span></div>
+      <input class="inp" id="h-q" placeholder="Buscar hospital" style="width:200px;margin-left:auto" value="${esc(HF.q)}"></div>
+    <div class="hint" id="h-par" style="margin:-4px 0 10px"></div>
     <div class="panel" style="padding:0"><table class="t"><thead><tr><th>Hospital</th><th>Médicos</th><th>Situação</th><th></th></tr></thead><tbody>
-    ${S.hospitals.map((h) => `<tr><td><b>${esc(h.nome)}</b></td><td>${counts[h.nome] || 0}</td><td>${h.ativo ? '<span class="tag g">Ativo</span>' : '<span class="tag">Inativo</span>'}</td>
-      <td><button class="btn btn-line btn-sm" data-hren="${esc(h.nome)}">Renomear</button> <button class="btn btn-line btn-sm" data-htog="${esc(h.nome)}">${h.ativo ? 'Inativar' : 'Ativar'}</button></td></tr>`).join('')}
-    </tbody></table></div>`;
-  $('#h-add').onclick = async () => {
-    const nome = $('#h-new').value.trim();
-    if (!nome) { toast('Digite o nome do hospital.', 'err'); $('#h-new').focus(); return; }
-    const { error } = await sb.from('flow_hospitals').insert({ nome });
-    if (error) return toast(error.code === '23505' ? 'Esse hospital já existe.' : error.message, 'err');
-    toast('Hospital adicionado', 'ok'); renderAdmin();
-  };
+    ${lista.map((h) => { const n = counts[h.nome] || 0; return `<tr><td><b>${esc(h.nome)}</b></td><td>${n}</td><td>${h.ativo ? '<span class="tag g">Ativo</span>' : '<span class="tag">Inativo</span>'}</td>
+      <td style="white-space:nowrap"><button class="btn btn-line btn-sm" data-hren="${esc(h.nome)}">Renomear</button> <button class="btn btn-line btn-sm" data-htog="${esc(h.nome)}">${h.ativo ? 'Inativar' : 'Ativar'}</button>
+      ${n ? `<button class="btn btn-line btn-sm" disabled title="Tem ${n} médico(s): use Inativar para tirar das listas sem perder o histórico">Excluir</button>` : `<button class="btn btn-line btn-sm" data-hdel="${esc(h.nome)}" style="color:var(--red)">Excluir</button>`}</td></tr>`; }).join('') || '<tr><td colspan="4" class="empty">Nenhum hospital encontrado.</td></tr>'}
+    </tbody></table></div>
+    <div class="hint">Renomear atualiza todos os médicos daquele hospital. Inativar tira o hospital das listas de cadastro, mas mantém os médicos e o histórico. Excluir só é possível em hospital sem nenhum médico (cadastrado por engano).</div>`;
+  $('#h-new').oninput = (e) => { const p = hospParecido(e.target.value); $('#h-par').innerHTML = p ? `Parecido com <b>${esc(p.nome)}</b>${p.ativo ? '' : ' (inativo)'}: confira se não é o mesmo.` : ''; };
+  $('#h-add').onclick = async () => { if (await criarHospital($('#h-new').value)) renderAdmin(); };
+  $('#h-new').onkeydown = (e) => { if (e.key === 'Enter') $('#h-add').click(); };
+  let t;
+  $('#h-q').oninput = (e) => { clearTimeout(t); t = setTimeout(() => { HF.q = e.target.value; drawHospitals().then(() => { const i = $('#h-q'); i.focus(); i.setSelectionRange(i.value.length, i.value.length); }); }, 200); };
+  $$('[data-pcriar]').forEach((b) => b.onclick = async () => {
+    const p = pedidos.find((x) => x.id === b.dataset.pcriar);
+    const existente = S.hospitals.find((h) => norm(h.nome) === norm(p.nome));
+    const nome = existente ? existente.nome : await criarHospital(p.nome);
+    if (!nome) return;
+    await sb.from('flow_hospital_pedidos').update({ status: 'criado', hospital_criado: nome }).eq('id', p.id);
+    if (existente) toast(`"${nome}" já estava na lista. Avisamos quem pediu.`, 'ok');
+    renderAdmin();
+  });
+  $$('[data-precusar]').forEach((b) => b.onclick = () => {
+    const p = pedidos.find((x) => x.id === b.dataset.precusar);
+    const m = openModal(`<div class="modal-head"><h2>Recusar pedido</h2><button class="x" data-close>✕</button></div>
+      <div class="modal-body"><p style="margin-top:0">"${esc(p.nome)}", pedido por ${esc(p.pedido_por_nome || '—')}.</p><div class="field"><label>Motivo (vai para quem pediu)</label><input class="inp" id="pr-mot" placeholder="Ex.: já existe como Hospital Santa Cruz"></div></div>
+      <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-danger" id="pr-ok">Recusar</button></div>`, { size: 'sm' });
+    $('#pr-ok', m.el).onclick = async () => {
+      const { error } = await sb.from('flow_hospital_pedidos').update({ status: 'recusado', resposta: $('#pr-mot', m.el).value.trim() }).eq('id', p.id);
+      if (error) return toast(friendlyDbError(error, 'Erro'), 'err');
+      m.close(); toast('Pedido recusado. Avisamos quem pediu.', 'ok'); renderAdmin();
+    };
+  });
   $$('[data-htog]').forEach((b) => b.onclick = async () => {
     const h = S.hospitals.find((x) => x.nome === b.dataset.htog);
     const { error } = await sb.from('flow_hospitals').update({ ativo: !h.ativo }).eq('nome', h.nome);
@@ -249,14 +333,22 @@ function drawHospitals() {
     toast(`${h.nome} ${h.ativo ? 'inativado' : 'ativado'}`, 'ok');
     renderAdmin();
   });
+  $$('[data-hdel]').forEach((b) => b.onclick = async () => {
+    const nome = b.dataset.hdel;
+    if (!(await confirmDlg('Excluir hospital', `Excluir "${nome}" da lista? Ele não tem nenhum médico.`, { okText: 'Excluir', danger: true }))) return;
+    const { error } = await sb.from('flow_hospitals').delete().eq('nome', nome);
+    if (error) return toast(error.code === '23503' ? 'Esse hospital tem médicos: use Inativar.' : error.message, 'err');
+    toast(`"${nome}" excluído`, 'ok'); renderAdmin();
+  });
   $$('[data-hren]').forEach((b) => b.onclick = () => {
     const old = b.dataset.hren;
     const m = openModal(`<div class="modal-head"><h2>Renomear hospital</h2><button class="x" data-close>✕</button></div>
-      <div class="modal-body"><div class="field"><label>Novo nome</label><input class="inp" id="hr" value="${esc(old)}"></div></div>
+      <div class="modal-body"><div class="field"><label>Novo nome</label><input class="inp" id="hr" value="${esc(old)}"></div><div class="hint">Os ${counts[old] || 0} médico(s) deste hospital passam para o novo nome.</div></div>
       <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="hr-ok">Salvar</button></div>`, { size: 'sm' });
     $('#hr-ok', m.el).onclick = async () => {
-      const nome = $('#hr', m.el).value.trim();
+      const nome = $('#hr', m.el).value.replace(/\s+/g, ' ').trim();
       if (!nome || nome === old) return m.close();
+      if (S.hospitals.some((h) => h.nome !== old && norm(h.nome) === norm(nome))) return toast('Já existe um hospital com esse nome.', 'err');
       const { error } = await sb.from('flow_hospitals').update({ nome }).eq('nome', old);
       if (error) return toast(error.message, 'err');
       m.close(); toast('Hospital renomeado', 'ok'); renderAdmin();

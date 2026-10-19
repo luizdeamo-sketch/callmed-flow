@@ -30,7 +30,7 @@ function openNewDoctor() {
         <div class="field full"><label>Nome completo *</label><input class="inp" id="nd-name" placeholder="Dr. / Dra."></div>
         <div class="field"><label>WhatsApp *</label><input class="inp" id="nd-wa" placeholder="(11) 99999-9999"></div>
         <div class="field" style="display:grid;grid-template-columns:1fr 70px;gap:6px"><div class="field" style="margin:0"><label>CRM (número)</label><input class="inp" id="nd-crm" placeholder="123456"></div><div class="field" style="margin:0"><label>UF</label><input class="inp" id="nd-uf" value="SP" maxlength="2"></div></div>
-        <div class="field full"><label>Hospitais * <span class="muted">(1 cadastro por hospital)</span></label><div class="checks" id="nd-hosps"></div></div>
+        <div class="field full"><label>Hospitais * <span class="muted">(1 cadastro por hospital)</span></label><div class="checks" id="nd-hosps"></div><a href="#" id="nd-hosp-novo" class="small" style="margin-top:6px;color:var(--brand);font-weight:500">Hospital não está na lista?</a></div>
         <div class="full" id="nd-conflicts"></div>
         <div class="field full"><label>Setor *</label><div class="checks" id="nd-setores">${SETORES.map((s) => `<label><input type="checkbox" value="${esc(s)}"> ${esc(s)}</label>`).join('')}</div></div>
         <div class="field"><label>Status especialidade</label><select class="inp" id="nd-status"><option value="">Selecione</option>${STATUS_ESP.map((s) => `<option>${s}</option>`).join('')}</select></div>
@@ -103,6 +103,7 @@ function openNewDoctor() {
   ['#nd-wa', '#nd-name'].forEach((s) => $(s, el).addEventListener('input', check));
   $('#nd-crm', el).addEventListener('input', render);
   render();
+  $('#nd-hosp-novo', el).onclick = (e) => { e.preventDefault(); hospitalNovoDialog({ onCriado: (nome) => { hospSel.add(nome); render(); } }); };
 
   $('#nd-ok', el).onclick = async () => {
     const btn = $('#nd-ok', el);

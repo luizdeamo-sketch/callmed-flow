@@ -50,7 +50,7 @@
       flow_user_roles: [],
       flow_doctors: [], flow_activities: [], flow_doctor_documents: [], flow_notifications: [],
       flow_sugestoes: [{ id: crypto.randomUUID(), autor_id: CAMILA, autor: 'Camila Rocha', texto: 'Seria ótimo ver no Hoje quantos documentos faltam de cada médico.', origem: 'texto', tipo: 'melhoria', tela: 'Hoje', prioridade: 'normal', status: 'em_analise', audio_path: null, resposta: '', historico: [], anexos: [], created_at: iso(NOW - 2 * DAY), atualizado_em: iso(NOW - DAY) }],
-      flow_rqe_requests: [], flow_rqe_documents: [], flow_tarefas: [],
+      flow_rqe_requests: [], flow_rqe_documents: [], flow_tarefas: [], flow_hospital_pedidos: [],
     };
     let n = 0;
     MIX.forEach(([final, qty]) => {
@@ -106,6 +106,7 @@
         const arr = [].concat(st.payload).map((r) => {
           const row = { id: crypto.randomUUID(), created_at: iso(Date.now()), ...r };
           if (table === 'flow_activities') { row.created_by = S.user.id; row.created_by_name = S.profile.display_name; }
+          if (table === 'flow_hospital_pedidos') { row.status ||= 'pendente'; row.pedido_por_nome = S.profile.display_name; }
           if (table === 'flow_sugestoes') { row.status ||= 'nova'; row.historico ||= []; row.anexos ||= []; row.atualizado_em = row.created_at; }
           if (table === 'flow_doctors') { row.created_by = S.user.id; row.updated_at = row.created_at; row.entry_date ||= row.created_at; row.stage_entered_at ||= row.created_at; }
           return row;

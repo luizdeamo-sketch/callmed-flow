@@ -4,6 +4,14 @@
 /** Mais recente primeiro. `id` só cresce; a pessoa vê as versões com id maior que a última que ela já viu. */
 const NOVIDADES = [
   {
+    id: 4, data: '19/10', titulo: 'Hospitais novos sem travar o cadastro',
+    itens: [
+      ['Hospital não está na lista?', 'No cadastro do médico, clique nesse link. Administrador cadastra na hora; os demais enviam o pedido e recebem o aviso quando o hospital entrar.'],
+      ['Quem cuida da lista', 'Os administradores, em Admin → Hospitais: incluir, renomear, inativar e excluir. Pedidos pendentes aparecem no topo.'],
+      ['Sem duplicar', 'O Flow avisa quando o nome é parecido com um hospital que já existe (ex.: "H. Santa Cruz" e "Hospital Santa Cruz").'],
+    ],
+  },
+  {
     id: 3, data: '19/10', titulo: 'Melhorias desta semana',
     itens: [
       ['Parecer jurídico na ficha', 'Aprovado, aprovado com restrição ou não aprovado. Só o Jurídico marca, e quem cuida do médico recebe o aviso na hora.'],

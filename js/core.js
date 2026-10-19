@@ -407,6 +407,7 @@ function renderBell() {
     pop.hidden = true; renderBell();
     const d = S.doctors.find((x) => x.id === el.dataset.doc);
     if (d) openDoctor(d);
+    else if (n && S.isAdmin && /Admin → Hospitais/.test(n.message)) { adminTab = 'hospitais'; go('usuarios'); }
   });
 }
 $('#btn-bell').onclick = (e) => {

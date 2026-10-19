@@ -576,3 +576,64 @@ create policy "uso: o app so insere" on public.flow_uso_eventos for insert to au
 alter table public.flow_sugestoes add column if not exists contexto jsonb;
 alter table public.flow_sugestoes drop constraint if exists flow_sugestoes_tipo_check;
 alter table public.flow_sugestoes add constraint flow_sugestoes_tipo_check check (tipo in ('ideia','melhoria','problema','duvida'));
+
+-- ---------- migração 14 (19/10/2026): pedidos de hospital novo (só administrador cadastra; os demais pedem) ----------
+create table if not exists public.flow_hospital_pedidos (
+  id uuid primary key default gen_random_uuid(),
+  nome text not null check (char_length(btrim(nome)) between 3 and 120),
+  obs text not null default '',
+  pedido_por uuid default auth.uid() references auth.users(id) on delete set null,
+  pedido_por_nome text not null default '',
+  status text not null default 'pendente' check (status in ('pendente','criado','recusado')),
+  hospital_criado text,
+  resposta text not null default '',
+  resolvido_por uuid references auth.users(id) on delete set null,
+  resolvido_em timestamptz,
+  created_at timestamptz not null default now()
+);
+alter table public.flow_hospital_pedidos enable row level security;
+create policy flow_hp_sel on public.flow_hospital_pedidos for select to authenticated using (public.flow_is_member());
+create policy flow_hp_ins on public.flow_hospital_pedidos for insert to authenticated with check (public.flow_is_member() and pedido_por = auth.uid() and status = 'pendente');
+create policy flow_hp_upd on public.flow_hospital_pedidos for update to authenticated using (public.flow_is_admin()) with check (public.flow_is_admin());
+
+-- carimba quem pediu e avisa os administradores; quando resolvido, avisa quem pediu
+create or replace function public.flow_hospital_pedidos_trg()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_nome text;
+begin
+  if tg_op = 'INSERT' then
+    if auth.uid() is not null then
+      new.pedido_por := auth.uid();
+      new.pedido_por_nome := coalesce((select nullif(display_name,'') from public.flow_profiles where user_id = auth.uid()), 'Alguém');
+    end if;
+    return new;
+  end if;
+  if new.status <> old.status and new.status in ('criado','recusado') then
+    new.resolvido_por := auth.uid(); new.resolvido_em := now();
+  end if;
+  return new;
+end $$;
+create trigger flow_hospital_pedidos_bi before insert or update on public.flow_hospital_pedidos
+  for each row execute function public.flow_hospital_pedidos_trg();
+
+create or replace function public.flow_hospital_pedidos_avisa()
+returns trigger language plpgsql security definer set search_path = public as $$
+declare v_quem text;
+begin
+  if tg_op = 'INSERT' then
+    insert into public.flow_notifications (user_id, doctor_id, doctor_name, message, created_by_name)
+    select r.user_id, null, '', format('%s pediu um hospital novo: "%s"%s. Cadastre em Admin → Hospitais.', new.pedido_por_nome, new.nome, case when new.obs <> '' then ' (' || left(new.obs, 100) || ')' else '' end), new.pedido_por_nome
+      from public.flow_user_roles r join public.flow_profiles p on p.user_id = r.user_id and p.ativo
+     where r.role = 'admin' and r.user_id is distinct from new.pedido_por;
+  elsif new.status <> old.status and new.status in ('criado','recusado') and new.pedido_por is not null and new.pedido_por is distinct from auth.uid() then
+    v_quem := coalesce((select nullif(display_name,'') from public.flow_profiles where user_id = auth.uid()), 'Administrador');
+    insert into public.flow_notifications (user_id, doctor_id, doctor_name, message, created_by_name)
+    values (new.pedido_por, null, '', case when new.status = 'criado'
+      then format('O hospital "%s" já está na lista. Pode cadastrar o médico.', coalesce(new.hospital_criado, new.nome))
+      else format('Seu pedido do hospital "%s" não foi aceito%s', new.nome, case when new.resposta <> '' then ': ' || new.resposta else '.' end) end, v_quem);
+  end if;
+  return null;
+end $$;
+create trigger flow_hospital_pedidos_ai after insert or update on public.flow_hospital_pedidos
+  for each row execute function public.flow_hospital_pedidos_avisa();
+revoke execute on function public.flow_hospital_pedidos_trg(), public.flow_hospital_pedidos_avisa() from public, anon, authenticated;
