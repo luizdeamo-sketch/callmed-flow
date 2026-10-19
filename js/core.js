@@ -477,6 +477,7 @@ async function startApp() {
   try { v = localStorage.getItem('flow:view2') || 'hoje'; } catch (_) { /* ignora */ }
   if ((['usuarios', 'auditoria', 'rqe'].includes(v) && !S.isAdmin) || v === 'medico') v = 'hoje';
   go(VIEWS[v] ? v : 'hoje');
+  if (typeof Novidades !== 'undefined') Novidades.checar();
   // atualização automática a cada 5 min com a aba visível
   setInterval(() => { if (document.visibilityState === 'visible' && !document.querySelector('.modal-bg')) reloadAll(true); }, 5 * 60 * 1000);
 }

@@ -71,7 +71,7 @@ const Ditado = {
     A.novaVersao = true;
     const f = document.createElement('div');
     f.id = 'ac-versao'; f.setAttribute('role', 'status');
-    f.innerHTML = '<span>Saiu uma versão nova do sistema. Salve o que estiver fazendo e clique em Atualizar.</span><button type="button" id="ac-versao-btn">Atualizar</button>';
+    f.innerHTML = '<span>Saiu uma versão nova do Flow, com melhorias. Salve o que estiver fazendo e clique em Atualizar para ver o que mudou.</span><button type="button" id="ac-versao-btn">Atualizar</button>';
     document.body.appendChild(f);
     document.getElementById('ac-versao-btn').addEventListener('click', () => location.reload()); // nunca recarrega sozinho
   }
@@ -125,7 +125,7 @@ const Ditado = {
   setInterval(flush, 15000);
 
   // telas: troca de tela (a partir da navegação do próprio Flow), tempo em cada uma e vai-e-volta
-  let rotaCur = null, tsTela = Date.now();
+  let rotaCur = null, tsTela = Date.now(), tsEntrou = 0; // tsEntrou: quando a pessoa entrou no sistema (a troca automática de tela do login não é vai-e-volta)
   const hist = [];
   function checarTela() {
     const root = document.getElementById('ac-root'), dentro = !!(email() && document.getElementById('app').classList.contains('active'));
@@ -133,6 +133,7 @@ const Ditado = {
     if (!email()) return;
     const r = rotaAtual(); if (r === rotaCur) return;
     const agora = Date.now(), ant = rotaCur, ms = agora - tsTela;
+    if (!ant || ant === '/login') tsEntrou = agora;
     rotaCur = r; tsTela = agora;
     uso('tela', nomeTela(r), { anterior: ant, ms_na_anterior: ant ? ms : null }, r);
     hist.push({ rota: r, ts: agora }); if (hist.length > 4) hist.shift();
@@ -140,7 +141,7 @@ const Ditado = {
       const [a, b, c] = hist.slice(-3);
       const secao = (x) => x.split('/')[1];
       // A → B → A em menos de 30 s, B de outra seção (abrir a ficha e voltar para a lista não conta)
-      if (c.rota === a.rota && b.rota !== a.rota && secao(b.rota) !== secao(a.rota) && secao(b.rota) !== 'medico' && c.ts - a.ts < 30000) duvida('voltou');
+      if (c.rota === a.rota && b.rota !== a.rota && secao(b.rota) !== secao(a.rota) && secao(b.rota) !== 'medico' && c.ts - a.ts < 30000 && a.ts - tsEntrou > 15000) duvida('voltou');
     }
   }
   A.checarTela = checarTela;
