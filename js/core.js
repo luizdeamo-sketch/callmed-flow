@@ -264,7 +264,31 @@ function showOnly(id) {
 
 let passMode = 'forced'; // 'forced' (troca obrigatória) | 'recovery' (link de e-mail)
 
+/** Arquivos que precisam estar carregados antes de abrir o sistema (um por arquivo, com uma função dele). */
+const ARQUIVOS_FLOW = [['hoje.js', 'nextCounts'], ['fluxo.js', 'moveDoctor'], ['doctor.js', 'openDoctor'], ['rqe.js', 'renderRqe'], ['reports.js', 'exportHistorico'], ['sugestoes.js', 'renderSugestoes'], ['admin.js', 'renderAdmin']];
+/** Se a internet falhou ao baixar algum arquivo, recarrega uma vez sozinho; se faltar de novo, avisa em vez de abrir telas vazias. */
+function arquivosOk() {
+  const faltam = ARQUIVOS_FLOW.filter(([, fn]) => typeof window[fn] !== 'function').map(([f]) => f);
+  if (!faltam.length) return true;
+  let ultima = 0;
+  try { ultima = +sessionStorage.getItem('flow:recarga') || 0; } catch (_) { /* sem armazenamento */ }
+  if (Date.now() - ultima > 60000) {
+    try { sessionStorage.setItem('flow:recarga', String(Date.now())); sessionStorage.setItem('flow:recarga-faltou', faltam.join(', ')); } catch (_) { /* sem armazenamento */ }
+    location.reload();
+    return false;
+  }
+  try { sessionStorage.setItem('flow:recarga-faltou', faltam.join(', ')); } catch (_) { /* sem armazenamento */ }
+  const f = document.createElement('div');
+  f.setAttribute('role', 'alert');
+  f.style.cssText = 'position:fixed;top:0;left:0;right:0;z-index:400;background:#b42318;color:#fff;padding:12px 16px;font:600 14px system-ui,sans-serif;text-align:center';
+  f.innerHTML = 'O Flow não carregou por completo (a internet falhou ao baixar uma parte do sistema). Confira a conexão e <button type="button" style="margin-left:8px;border:0;border-radius:999px;padding:5px 14px;font-weight:700;cursor:pointer">Recarregar</button>';
+  f.querySelector('button').onclick = () => location.reload();
+  document.body.appendChild(f);
+  return false;
+}
+
 async function boot() {
+  if (!arquivosOk()) return;
   const { data: { session } } = await sb.auth.getSession();
   if (!session) return showOnly('login-screen');
   S.user = session.user;

@@ -764,17 +764,18 @@
 <div id="toasts"></div>
 
 <script>window.FLOW_DEMO = new URLSearchParams(location.search).has('demo');</script>
-<script src="config.js?v=20261019171958"></script>
-<script src="js/core.js?v=20261019171958"></script>
-<script src="js/hoje.js?v=20261019171958"></script>
-<script src="js/fluxo.js?v=20261019171958"></script>
-<script src="js/doctor.js?v=20261019171958"></script>
-<script src="js/rqe.js?v=20261019171958"></script>
-<script src="js/reports.js?v=20261019171958"></script>
-<script src="js/sugestoes.js?v=20261019171958"></script>
-<script src="js/admin.js?v=20261019171958"></script>
-<script src="js/acompanhante.js?v=20261019171958"></script>
-<script src="js/novidades.js?v=20261019171958"></script>
-<script>if (window.FLOW_DEMO) document.write('<script src="js/demo.js?v=20261019171958"><\/script><script src="js/demo-tour.js?v=20261019171958"><\/script>');</script>
+<script>window.FLOW_FALHAS = []; window.addEventListener('error', function (e) { var t = e.target; if (t && t.tagName === 'SCRIPT') window.FLOW_FALHAS.push(String(t.src).split('/').pop().split('?')[0]); }, true);</script>
+<script src="config.js?v=20261026092534"></script>
+<script src="js/core.js?v=20261026092534"></script>
+<script src="js/hoje.js?v=20261026092534"></script>
+<script src="js/fluxo.js?v=20261026092534"></script>
+<script src="js/doctor.js?v=20261026092534"></script>
+<script src="js/rqe.js?v=20261026092534"></script>
+<script src="js/reports.js?v=20261026092534"></script>
+<script src="js/sugestoes.js?v=20261026092534"></script>
+<script src="js/admin.js?v=20261026092534"></script>
+<script src="js/acompanhante.js?v=20261026092534"></script>
+<script src="js/novidades.js?v=20261026092534"></script>
+<script>if (window.FLOW_DEMO) document.write('<script src="js/demo.js?v=20261026092534"><\/script><script src="js/demo-tour.js?v=20261026092534"><\/script>');</script>
 </body>
 </html>

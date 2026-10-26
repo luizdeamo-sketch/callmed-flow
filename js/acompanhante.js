@@ -425,6 +425,15 @@ const Ditado = {
     @media (max-width:760px){ #ac-root{ bottom:78px; right:12px; } .ac-desenho{ display:none; } #ac-box, #ac-bubble{ width:calc(100vw - 32px); } }`;
   document.head.appendChild(css);
 
-  function iniciar() { montar(); checarTela(); verificarVersao(); }
+  /** Avisa no registro de uso quando algum arquivo do sistema não baixou (e qual navegador era), para achar a causa. */
+  function falhasDeCarga() {
+    let faltou = '';
+    try { faltou = sessionStorage.getItem('flow:recarga-faltou') || ''; sessionStorage.removeItem('flow:recarga-faltou'); } catch (_) { /* sem armazenamento */ }
+    const falhas = (window.FLOW_FALHAS || []).join(', ');
+    if (!faltou && !falhas) return;
+    const reg = () => { if (!email()) return setTimeout(reg, 3000); uso('erro', 'arquivo não carregou: ' + (falhas || faltou), { faltou, falhas, navegador: navigator.userAgent.slice(0, 180) }); flush(); };
+    reg();
+  }
+  function iniciar() { montar(); checarTela(); verificarVersao(); falhasDeCarga(); }
   if (document.readyState === 'loading') document.addEventListener('DOMContentLoaded', iniciar); else iniciar();
 })();
