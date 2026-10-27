@@ -4,6 +4,13 @@
 /** Mais recente primeiro. `id` só cresce; a pessoa vê as versões com id maior que a última que ela já viu. */
 const NOVIDADES = [
   {
+    id: 5, data: '27/10', titulo: 'Filtro por data de cadastro',
+    itens: [
+      ['Cadastrados de … até …', 'Em Filtros, escolha as datas para ver só os médicos cadastrados naquele período. Junto com o filtro de hospital, separa os cadastros novos dos antigos.'],
+      ['Vale para a exportação', 'O botão Exportar leva para o Excel só os médicos do período escolhido.'],
+    ],
+  },
+  {
     id: 4, data: '19/10', titulo: 'Hospitais novos sem travar o cadastro',
     itens: [
       ['Hospital não está na lista?', 'No cadastro do médico, clique nesse link. Administrador cadastra na hora; os demais enviam o pedido e recebem o aviso quando o hospital entrar.'],

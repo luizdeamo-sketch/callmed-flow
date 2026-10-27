@@ -3,8 +3,11 @@
 
 const F = {
   search: '', hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false,
-  next: '', resp: '', mine: false,
+  next: '', resp: '', mine: false, entDe: '', entAte: '',
 };
+/** Dia de entrada do médico no fluxo (data do cadastro), no fuso local, como 'aaaa-mm-dd'. */
+function entradaYmd(d) { const v = d.entry_date || d.created_at; return v ? ymd(new Date(v)) : ''; }
+const dataBr = (s) => String(s || '').split('-').reverse().join('/');
 const FX = { sumOpen: true, mode: 'jornada', gran: 'dia', offset: 0, limit: 300, showDone: false, sort: 'sla', filtersOpen: false, cell: null };
 try { FX.sumOpen = localStorage.getItem('flow:sum') !== 'false'; } catch (_) { /* ignora */ }
 
@@ -47,6 +50,7 @@ function filteredDoctors() {
   return S.doctors.filter((d) => {
     if (q && !(norm(d.name).includes(q) || norm(d.crm).includes(q) || norm(d.cpf).includes(q) || norm(d.hospital).includes(q) || norm(d.whatsapp).includes(q) || norm((d.setores || []).join(' ')).includes(q))) return false;
     if (F.hospitals.length && !F.hospitals.includes(d.hospital)) return false;
+    if (F.entDe || F.entAte) { const e = entradaYmd(d); if (!e || (F.entDe && e < F.entDe) || (F.entAte && e > F.entAte)) return false; }
     if (F.setor && !(d.setores || []).includes(F.setor)) return false;
     if (F.estado && d.estado !== F.estado) return false;
     if (F.stage && d.stage !== F.stage) return false;
@@ -72,7 +76,7 @@ function filteredDoctors() {
   });
 }
 function activeFilterCount() {
-  return [F.hospitals.length, F.setor, F.estado, F.stage, F.disc, F.statusEsp, F.app, F.procuracao, F.priority, F.slaVencido, F.next, F.resp, F.mine].filter(Boolean).length;
+  return [F.hospitals.length, F.entDe || F.entAte, F.setor, F.estado, F.stage, F.disc, F.statusEsp, F.app, F.procuracao, F.priority, F.slaVencido, F.next, F.resp, F.mine].filter(Boolean).length;
 }
 
 // ================= estrutura da tela =================
@@ -180,6 +184,7 @@ function buildFilters() {
     <button id="f-hosp-btn" title="Filtrar por hospital (pode escolher vários)"></button>
     <div class="pop" id="f-hosp-pop" hidden style="top:38px;left:0;right:auto;width:340px;padding:8px"></div>`;
   $('#fx-more').innerHTML = `
+    <span class="small" style="display:flex;gap:6px;align-items:center" title="Data em que o médico foi cadastrado (entrou no fluxo)">Cadastrados de <input type="date" id="f-entde" value="${esc(F.entDe)}"> até <input type="date" id="f-entate" value="${esc(F.entAte)}"></span>
     <select id="f-stage"><option value="">Qualquer etapa</option>${S.stages.map((s) => opt(s.id, s.label, F.stage)).join('')}</select>
     <select id="f-setor"><option value="">Todos os setores</option>${setores.map((s) => opt(s, s, F.setor)).join('')}</select>
     <select id="f-prio"><option value="">Qualquer prioridade</option>${Object.entries(PRIORITIES).map(([k, l]) => opt(k, l, F.priority)).join('')}</select>
@@ -197,12 +202,12 @@ function buildFilters() {
   const bind = (id, key) => { $(id).onchange = (e) => { F[key] = e.target.value; refreshFluxo(); }; };
   bind('#f-setor', 'setor'); bind('#f-estado', 'estado'); bind('#f-stage', 'stage'); bind('#f-disc', 'disc');
   bind('#f-status', 'statusEsp'); bind('#f-app', 'app'); bind('#f-proc', 'procuracao'); bind('#f-prio', 'priority');
-  bind('#f-next', 'next'); bind('#f-resp', 'resp');
+  bind('#f-next', 'next'); bind('#f-resp', 'resp'); bind('#f-entde', 'entDe'); bind('#f-entate', 'entAte');
   $('#f-sla').onchange = (e) => { F.slaVencido = !!e.target.value; refreshFluxo(); };
   $('#f-done').onchange = (e) => { FX.showDone = e.target.checked; refreshFluxo(); };
   $('#f-mine').onchange = (e) => { F.mine = e.target.checked; refreshFluxo(); };
   $('#f-clear').onclick = () => {
-    Object.assign(F, { hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '', mine: false });
+    Object.assign(F, { hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '', mine: false, entDe: '', entAte: '' });
     buildFilters(); refreshFluxo();
   };
   $('#f-hosp-btn').onclick = (e) => { e.stopPropagation(); const p = $('#f-hosp-pop'); p.hidden = !p.hidden; if (!p.hidden) renderHospPop(); };
@@ -425,6 +430,7 @@ function renderCellChip() {
   if (F.stage) chip(`Etapa atual: <b>${esc(stageLabel(F.stage))}</b>`, 'stage');
   if (F.priority) chip(`Prioridade: <b>${esc(PRIORITIES[F.priority] || F.priority)}</b>`, 'priority');
   if (F.hospitals.length) chip(`Hospital: <b>${esc(F.hospitals.length === 1 ? F.hospitals[0] : F.hospitals.length + ' selecionados')}</b>`, 'hospitals');
+  if (F.entDe || F.entAte) chip(`Cadastrados <b>${F.entDe && F.entAte ? `de ${dataBr(F.entDe)} até ${dataBr(F.entAte)}` : F.entDe ? `a partir de ${dataBr(F.entDe)}` : `até ${dataBr(F.entAte)}`}</b>`, 'ent');
   if (F.setor) chip(`Setor: <b>${esc(F.setor)}</b>`, 'setor');
   if (F.statusEsp) chip(`Formação: <b>${esc(F.statusEsp)}</b>`, 'statusEsp');
   if (F.disc) chip(`DISC: <b>${esc(DISC_LABEL[F.disc])}</b>`, 'disc');
@@ -446,13 +452,14 @@ function renderCellChip() {
     else if (k === 'hospitals') F.hospitals = [];
     else if (k === 'slaVencido') F.slaVencido = false;
     else if (k === 'mine') F.mine = false;
+    else if (k === 'ent') { F.entDe = ''; F.entAte = ''; }
     else { F[k] = ''; if (k === 'search') $('#f-search').value = ''; }
     buildFilters(); refreshFluxo();
   });
   const all = $('#fx-unall', box);
   if (all) all.onclick = () => {
     FX.cell = null; $('#f-search').value = '';
-    Object.assign(F, { search: '', hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '', mine: false });
+    Object.assign(F, { search: '', hospitals: [], setor: '', estado: '', stage: '', disc: '', statusEsp: '', app: '', procuracao: '', priority: '', slaVencido: false, next: '', resp: '', mine: false, entDe: '', entAte: '' });
     buildFilters(); refreshFluxo();
   };
 }
