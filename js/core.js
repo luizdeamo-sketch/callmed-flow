@@ -468,6 +468,7 @@ function go(view) {
   $('#hdr-sub').textContent = VIEW_SUBS[view] || '';
   try { localStorage.setItem('flow:view2', view); } catch (_) { /* ignora */ }
   VIEWS[view] && VIEWS[view]();
+  document.dispatchEvent(new CustomEvent('flow-tela', { detail: { view } }));
 }
 $$('#rail .nav-btn').forEach((b) => b.addEventListener('click', () => go(b.dataset.view)));
 document.addEventListener('click', (e) => { const b = e.target.closest('[data-goview]'); if (b) go(b.dataset.goview); });
@@ -503,6 +504,7 @@ async function startApp() {
   if ((['usuarios', 'auditoria', 'rqe'].includes(v) && !S.isAdmin) || v === 'medico') v = 'hoje';
   go(VIEWS[v] ? v : 'hoje');
   if (typeof Novidades !== 'undefined') Novidades.checar();
+  if (typeof sgRetornoCarrega === 'function') { sgRetornoCarrega(); if (!S.sgTimer) S.sgTimer = setInterval(sgRetornoCarrega, 5 * 60000); } // respostas às sugestões de quem está logado
   // atualização automática a cada 5 min com a aba visível
   setInterval(() => { if (document.visibilityState === 'visible' && !document.querySelector('.modal-bg')) reloadAll(true); }, 5 * 60 * 1000);
 }

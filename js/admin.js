@@ -27,7 +27,7 @@ async function renderAdmin() {
 // ---------- migração única do Flow antigo (Lovable) ----------
 function drawMigration() {
   $('#adm-body').innerHTML = `
-    <div class="panel" style="max-width:760px">
+    <div class="panel">
       <h3>Importar dados do Flow antigo</h3>
       <p class="small" style="margin-top:0">Selecione os 3 arquivos gerados na migração: <span class="mono">payload_doctors.json</span>, <span class="mono">payload_acts.json</span> e <span class="mono">payload_docs.json</span>.
       A carga pode ser repetida sem duplicar nada (cada registro mantém o ID original). Os médicos entram primeiro, depois histórico e documentos.</p>

@@ -637,3 +637,42 @@ end $$;
 create trigger flow_hospital_pedidos_ai after insert or update on public.flow_hospital_pedidos
   for each row execute function public.flow_hospital_pedidos_avisa();
 revoke execute on function public.flow_hospital_pedidos_trg(), public.flow_hospital_pedidos_avisa() from public, anon, authenticated;
+
+-- ---------- migração 15 (27/10/2026): sugestões no padrão balao-e-sugestoes ----------
+-- cada sugestão só aparece para o gestor (administradores do Flow) e para quem a criou; só o gestor muda o status;
+-- quem sugeriu responde ao retorno ("ficou bom" / "ainda não ficou") pela função flow_sugestao_retorno
+alter table public.flow_sugestoes add column if not exists retorno text check (retorno is null or retorno in ('ficou_bom','nao_ficou'));
+alter table public.flow_sugestoes add column if not exists retorno_em timestamptz;
+alter table public.flow_sugestoes add column if not exists resposta_vista_em timestamptz;
+create index if not exists flow_sugestoes_autor_idx on public.flow_sugestoes (autor_id);
+drop policy if exists flow_sug_sel on public.flow_sugestoes;
+drop policy if exists flow_sug_ins on public.flow_sugestoes;
+drop policy if exists flow_sug_upd on public.flow_sugestoes;
+create policy flow_sug_sel on public.flow_sugestoes for select to authenticated
+  using ((select public.flow_is_member()) and ((select public.flow_is_admin()) or autor_id = (select auth.uid())));
+create policy flow_sug_ins on public.flow_sugestoes for insert to authenticated
+  with check ((select public.flow_is_member()) and autor_id = (select auth.uid()));
+create policy flow_sug_upd on public.flow_sugestoes for update to authenticated
+  using ((select public.flow_is_admin())) with check ((select public.flow_is_admin()));
+create or replace function public.flow_sugestao_retorno(p_id uuid, p_retorno text default null, p_nota text default null) returns void
+ language plpgsql security definer set search_path to 'public' as $$
+declare s public.flow_sugestoes; v_para text;
+begin
+  select * into s from public.flow_sugestoes where id = p_id;
+  if s.id is null or s.autor_id is distinct from auth.uid() then raise exception 'Sugestão não encontrada.'; end if;
+  if p_retorno is not null and p_retorno not in ('ficou_bom','nao_ficou') then raise exception 'Retorno inválido.'; end if;
+  v_para := case when p_retorno = 'nao_ficou' and s.status in ('concluida','rejeitada','depois','aprovada') then 'em_analise' else s.status end;
+  update public.flow_sugestoes set
+    resposta_vista_em = coalesce(resposta_vista_em, now()),
+    retorno = coalesce(p_retorno, retorno),
+    retorno_em = case when p_retorno is not null then now() else retorno_em end,
+    status = case when p_retorno is not null then v_para else status end,
+    historico = case when p_retorno is null then historico else coalesce(historico, '[]'::jsonb) || jsonb_build_array(jsonb_build_object(
+      'em', now(), 'por', s.autor, 'de', s.status, 'para', v_para,
+      'nota', case p_retorno when 'ficou_bom' then 'Quem sugeriu: ficou bom 👍' else 'Quem sugeriu: ainda não ficou' end
+              || case when coalesce(btrim(p_nota), '') <> '' then ' — ' || left(btrim(p_nota), 1000) else '' end)) end,
+    atualizado_em = now()
+  where id = p_id;
+end $$;
+revoke all on function public.flow_sugestao_retorno(uuid, text, text) from public, anon;
+grant execute on function public.flow_sugestao_retorno(uuid, text, text) to authenticated;

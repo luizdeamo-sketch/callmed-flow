@@ -260,49 +260,135 @@ const Ditado = {
     if (Date.now() - ac.ultimaDuvida < 900000) return;
     setTimeout(() => { if (Date.now() - ac.ultimaDuvida < 900000) return; if (mostrarBalao(motivo, PERGUNTAS[motivo])) ac.ultimaDuvida = Date.now(); }, 1500);
   });
-  // primeira vez numa tela: depois de 25 s nela, uma vez por tela, no máximo um balão a cada 5 min
-  setInterval(() => {
-    if (!email() || SEM_BALAO.includes(email()) || !rotaCur || rotaCur === '/login') return;
-    if (Date.now() - tsTela < 25000 || Date.now() - ac.ultimoAuto < 300000) return;
-    const chave = 'ac_telas:' + email(), vistas = lsGet(chave, []);
-    if (vistas.includes(rotaCur)) return;
-    if (mostrarBalao('primeira', `Primeira vez em ${nomeTela(rotaCur)} no sistema novo. Está funcionando como você esperava?`)) { vistas.push(rotaCur); lsSet(chave, vistas); ac.ultimoAuto = Date.now(); }
-  }, 1500);
+  // (o balão de "primeira vez numa tela" foi desligado: era ignorado quase sempre — skill balao-e-sugestoes)
 
-  // print da área visível (html-to-image), com limite de 8 s: se demorar, segue sem print
+  // print no padrão do Aliança: a pessoa escolhe a área (ou a tela inteira / outra janela) e marca em cima
   let libImg = null;
   async function carregarLib() {
     if (window.htmlToImage) return window.htmlToImage;
     if (!libImg) libImg = new Promise((res, rej) => { const s = document.createElement('script'); s.src = 'https://cdn.jsdelivr.net/npm/html-to-image@1.11.11/dist/html-to-image.js'; s.onload = () => res(window.htmlToImage); s.onerror = rej; document.head.appendChild(s); });
     return libImg;
   }
-  async function tirarPrint() {
-    const gen = ++ac.gen;
-    const el = $id('ac-print'); if (el) el.innerHTML = '<span class="ac-mut">Tirando o print da tela…</span>';
-    let blob = null;
+  // area: {} = tela inteira; {rect} = área arrastada; {url} = outra janela já capturada. Devolve uma URL de imagem (ou null), em até 8 s.
+  async function capturar(area) {
+    area = area || {};
+    if (area.url) return area.url;
     try {
-      blob = await Promise.race([(async () => {
+      return await Promise.race([(async () => {
         const lib = await carregarLib();
         const w = window.innerWidth, h = window.innerHeight;
         const url = await lib.toJpeg(document.body, {
-          quality: 0.75, skipFonts: true, backgroundColor: '#ffffff', width: w, height: h, canvasWidth: w, canvasHeight: h,
-          pixelRatio: Math.min(1, 1100 / w),
+          quality: 0.85, skipFonts: true, backgroundColor: '#ffffff', width: w, height: h, canvasWidth: w, canvasHeight: h, pixelRatio: 1,
           style: { transform: `translate(${-window.scrollX}px, ${-window.scrollY}px)` },
-          filter: (n) => !(n.id === 'ac-root' || n.id === 'toasts' || n.id === 'ac-versao' || (n.classList && (n.classList.contains('dm-bar') || n.classList.contains('dm-banner') || n.classList.contains('dm-cursor') || n.classList.contains('dm-ring')))),
+          imagePlaceholder: 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==',
+          filter: (n) => !(n.id === 'ac-root' || n.id === 'toasts' || n.id === 'ac-versao' || n.id === 'ac-sel' || n.id === 'ac-ed' || n.tagName === 'SCRIPT' || (n.classList && (n.classList.contains('dm-bar') || n.classList.contains('dm-banner') || n.classList.contains('dm-cursor') || n.classList.contains('dm-ring')))),
         });
-        return (await fetch(url)).blob();
+        const R = area.rect; if (!R) return url;
+        const img = await new Promise((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = falha; i.src = url; });
+        const k = img.naturalWidth / w, cv = document.createElement('canvas');
+        cv.width = Math.round(R.w * k); cv.height = Math.round(R.h * k);
+        cv.getContext('2d').drawImage(img, R.x * k, R.y * k, R.w * k, R.h * k, 0, 0, cv.width, cv.height);
+        return cv.toDataURL('image/jpeg', 0.85);
       })(), new Promise((_, rej) => setTimeout(() => rej(new Error('demorou')), 8000))]);
-    } catch (_) { blob = null; }
-    if (gen !== ac.gen) return; // a caixa foi fechada/reaberta nesse meio-tempo
-    ac.print = blob; desenharPrint();
+    } catch (_) { return null; }
   }
+  // escolher o que vai no print: arrastar uma área, tela inteira ou outra janela/aba
+  function escolherArea() {
+    return new Promise((res) => {
+      const ov = document.createElement('div'); ov.id = 'ac-sel';
+      ov.innerHTML = '<div class="ac-sel-bar"><b>O que vai no print?</b> Arraste sobre a tela para marcar a área, ou escolha: <button type="button" data-s="full">Tela inteira</button><button type="button" data-s="disp">Outra janela ou aba…</button><button type="button" data-s="x">Cancelar</button></div><div class="ac-sel-r" hidden></div>';
+      document.body.appendChild(ov);
+      const r = ov.querySelector('.ac-sel-r'); let x0 = 0, y0 = 0, arrastando = false;
+      const tecla = (e) => { if (e.key === 'Escape') fim(null); };
+      const fim = (v) => { document.removeEventListener('keydown', tecla); ov.remove(); res(v); };
+      document.addEventListener('keydown', tecla);
+      const caixa = (e) => ({ x: Math.min(x0, e.clientX), y: Math.min(y0, e.clientY), w: Math.abs(e.clientX - x0), h: Math.abs(e.clientY - y0) });
+      const pinta = (b) => { r.hidden = false; Object.assign(r.style, { left: b.x + 'px', top: b.y + 'px', width: b.w + 'px', height: b.h + 'px' }); };
+      ov.addEventListener('pointerdown', (e) => { if (e.target.closest('.ac-sel-bar')) return; arrastando = true; x0 = e.clientX; y0 = e.clientY; pinta({ x: x0, y: y0, w: 0, h: 0 }); e.preventDefault(); });
+      ov.addEventListener('pointermove', (e) => { if (arrastando) pinta(caixa(e)); });
+      ov.addEventListener('pointerup', (e) => { if (!arrastando) return; arrastando = false; const b = caixa(e); if (b.w < 30 || b.h < 30) { r.hidden = true; return; } fim({ rect: b }); });
+      ov.addEventListener('click', async (e) => {
+        const b = e.target.closest('[data-s]'); if (!b) return; const s = b.dataset.s;
+        if (s === 'x') { fim(null); return; } if (s === 'full') { fim({}); return; }
+        try {
+          const st = await navigator.mediaDevices.getDisplayMedia({ video: true, audio: false });
+          const v = document.createElement('video'); v.srcObject = st; await v.play(); await new Promise((rr) => setTimeout(rr, 350));
+          const cv = document.createElement('canvas'); cv.width = v.videoWidth; cv.height = v.videoHeight; cv.getContext('2d').drawImage(v, 0, 0); st.getTracks().forEach((x) => x.stop());
+          fim({ url: cv.toDataURL('image/jpeg', 0.85) });
+        } catch (_) { toast('Não foi possível capturar essa janela. Use a área na tela ou a tela inteira.', 'err'); }
+      });
+    });
+  }
+  // editor: riscar, retângulo e texto em vermelho por cima do print; devolve a imagem marcada (ou null se cancelar)
+  function editarPrint(url, campoTexto) {
+    return new Promise((res) => {
+      $id('ac-ed')?.remove();
+      const ed = document.createElement('div'); ed.id = 'ac-ed';
+      ed.innerHTML = '<div class="ac-ed-barra"><b>Marque no print</b><button type="button" data-t="pen" class="on">✏️ Riscar</button><button type="button" data-t="rect">▭ Retângulo</button><button type="button" data-t="txt">🔤 Texto</button>'
+        + '<button type="button" data-t="undo">↶ Desfazer</button><button type="button" data-t="clear">🗑 Limpar</button><span style="flex:1"></span><button type="button" data-t="cancel">Cancelar</button></div>'
+        + '<div class="ac-ed-area"><canvas id="ac-ed-c"></canvas></div>'
+        + '<div class="ac-ed-rod"><textarea id="ac-ed-txt" rows="2" placeholder="Descreva o ajuste (o que está errado ou o que você quer)…"></textarea><button type="button" data-t="usar" class="ac-pri">Usar este print</button></div>';
+      document.body.appendChild(ed);
+      const cv = ed.querySelector('#ac-ed-c'), ctx = cv.getContext('2d'), tx = ed.querySelector('#ac-ed-txt'), pilha = [], COR = '#e11d2e';
+      tx.value = campoTexto ? campoTexto.value : '';
+      let k = 1, ferramenta = 'pen', desenhando = false, x0 = 0, y0 = 0, base = null;
+      const img = new Image();
+      img.onload = () => { cv.width = img.naturalWidth; cv.height = img.naturalHeight; k = Math.max(1, cv.width / 1000); ctx.drawImage(img, 0, 0); pilha.push(ctx.getImageData(0, 0, cv.width, cv.height)); ctx.lineCap = 'round'; ctx.lineJoin = 'round'; };
+      img.src = url;
+      const pos = (ev) => { const r = cv.getBoundingClientRect(); return [(ev.clientX - r.left) * cv.width / r.width, (ev.clientY - r.top) * cv.height / r.height]; };
+      const salva = () => { pilha.push(ctx.getImageData(0, 0, cv.width, cv.height)); if (pilha.length > 25) pilha.splice(1, 1); };
+      const fim = (v) => { document.removeEventListener('keydown', teclas); ed.remove(); res(v); };
+      const teclas = (e) => { if (e.key === 'Escape' && !ed.querySelector('.ac-ed-in')) fim(null); };
+      document.addEventListener('keydown', teclas);
+      function escreve(x, y) {
+        const r = cv.getBoundingClientRect(), box = document.createElement('input'); box.type = 'text'; box.className = 'ac-ed-in'; box.placeholder = 'Escreva e tecle Enter';
+        box.style.left = (r.left + x * r.width / cv.width) + 'px'; box.style.top = (r.top + y * r.height / cv.height - 14) + 'px'; ed.appendChild(box); setTimeout(() => box.focus(), 30);
+        let feito = false;
+        const ok = () => {
+          if (feito) return; feito = true; const t = box.value.trim(); box.remove(); if (!t) return;
+          const fs = Math.round(22 * k); ctx.font = '700 ' + fs + 'px Geist, Arial, sans-serif'; ctx.textBaseline = 'middle'; ctx.lineWidth = fs / 5; ctx.strokeStyle = '#fff'; ctx.strokeText(t, x, y); ctx.fillStyle = COR; ctx.fillText(t, x, y); salva();
+        };
+        box.addEventListener('keydown', (e) => { if (e.key === 'Enter') ok(); if (e.key === 'Escape') { box.value = ''; ok(); } }); box.addEventListener('blur', ok);
+      }
+      cv.addEventListener('pointerdown', (ev) => {
+        ev.preventDefault(); const [x, y] = pos(ev);
+        if (ferramenta === 'txt') { escreve(x, y); return; }
+        desenhando = true; x0 = x; y0 = y; cv.setPointerCapture(ev.pointerId); base = ctx.getImageData(0, 0, cv.width, cv.height);
+        ctx.strokeStyle = COR; ctx.lineWidth = 4 * k; if (ferramenta === 'pen') { ctx.beginPath(); ctx.moveTo(x, y); ctx.lineTo(x + 0.1, y + 0.1); ctx.stroke(); }
+      });
+      cv.addEventListener('pointermove', (ev) => { if (!desenhando) return; const [x, y] = pos(ev); if (ferramenta === 'pen') { ctx.lineTo(x, y); ctx.stroke(); } else { ctx.putImageData(base, 0, 0); ctx.strokeRect(x0, y0, x - x0, y - y0); } });
+      const solta = () => { if (!desenhando) return; desenhando = false; salva(); };
+      cv.addEventListener('pointerup', solta); cv.addEventListener('pointercancel', solta);
+      ed.addEventListener('click', (e) => {
+        const b = e.target.closest('[data-t]'); if (!b) return; const t = b.dataset.t;
+        if (['pen', 'rect', 'txt'].includes(t)) { ferramenta = t; ed.querySelectorAll('[data-t=pen],[data-t=rect],[data-t=txt]').forEach((x) => x.classList.toggle('on', x === b)); cv.style.cursor = t === 'txt' ? 'text' : 'crosshair'; return; }
+        if (t === 'undo') { if (pilha.length > 1) { pilha.pop(); ctx.putImageData(pilha[pilha.length - 1], 0, 0); } return; }
+        if (t === 'clear') { ctx.putImageData(pilha[0], 0, 0); salva(); return; }
+        if (t === 'cancel') { fim(null); return; }
+        if (t === 'usar') { if (campoTexto && tx.value.trim()) campoTexto.value = tx.value; fim(cv.toDataURL('image/jpeg', 0.85)); }
+      });
+    });
+  }
+  // botão "Tirar print e marcar": esconde a caixa, escolhe a área, captura e abre o editor
+  async function tirarPrint() {
+    const gen = ++ac.gen, bx = $id('ac-box'), root = $id('ac-root');
+    root.style.visibility = 'hidden';
+    const area = await escolherArea(); let url = null;
+    if (area) { await new Promise((r) => setTimeout(r, 80)); url = await capturar(area); }
+    root.style.visibility = '';
+    if (gen !== ac.gen || bx.hidden) return; // a caixa foi fechada nesse meio-tempo
+    if (area && !url) { const el = $id('ac-print'); if (el) el.innerHTML = '<span class="ac-mut">Não consegui tirar o print; dá para enviar sem ele.</span> <button type="button" id="ac-tirar">📸 Tentar de novo</button>'; const t = $id('ac-tirar'); if (t) t.onclick = tirarPrint; return; }
+    if (url) { const marcado = await editarPrint(url, $id('ac-texto')); await usarPrint(marcado || url); }
+  }
+  async function usarPrint(url) { ac.print = url ? await (await fetch(url)).blob() : null; desenharPrint(); }
   function desenharPrint() {
     const el = $id('ac-print'); if (!el) return;
-    el.innerHTML = ac.print
-      ? `<img alt="Print da tela" src="${URL.createObjectURL(ac.print)}"><div class="ac-linha"><button type="button" id="ac-tirar">Tirar o print</button><span class="ac-mut">O print vai junto para a equipe ver o que você viu.</span></div>`
-      : '<span class="ac-mut">Sem print desta vez.</span> <button type="button" id="ac-reprint">Tentar de novo</button>';
-    const t = $id('ac-tirar'); if (t) t.onclick = () => { ac.print = null; desenharPrint(); };
-    const b = $id('ac-reprint'); if (b) b.onclick = tirarPrint;
+    el.innerHTML = (ac.print ? `<img alt="Print da tela" src="${URL.createObjectURL(ac.print)}">` : '')
+      + `<div class="ac-linha"><button type="button" id="ac-tirar">📸 ${ac.print ? 'Tirar de novo' : 'Tirar print e marcar'}</button>${ac.print ? '<button type="button" id="ac-marcar">✏️ Marcar</button><button type="button" id="ac-semprint">Tirar o print</button>' : ''}</div>`
+      + (ac.print ? '' : '<div class="ac-mut">Opcional: você escolhe a área (ou outra janela), risca e escreve em cima, e o print vai junto.</div>');
+    $id('ac-tirar').onclick = tirarPrint;
+    const m = $id('ac-marcar'); if (m) m.onclick = async () => { const u = await editarPrint(URL.createObjectURL(ac.print), $id('ac-texto')); if (u) await usarPrint(u); };
+    const s = $id('ac-semprint'); if (s) s.onclick = () => { ac.print = null; desenharPrint(); };
   }
   async function alternarVoz() {
     const btn = $id('ac-mic');
@@ -324,11 +410,11 @@ const Ditado = {
     ac.motivo = motivo; ac.pergunta = pergunta || ''; ac.tipo = TIPO_PADRAO[motivo] || 'melhoria';
     if (!veioDoBalao) uso('balao', motivo, { evento: 'abriu', pergunta: pergunta || null });
     bx.innerHTML = '<div class="ac-cab"><b>Conta pra gente</b><button type="button" id="ac-fechar" aria-label="Fechar">✕</button></div>'
-      + `<p class="ac-perg">${pergunta ? esc(pergunta) : `Escreva ou fale sobre a tela <b>${esc(nomeTela(rotaAtual()))}</b>. O print dela vai junto.`}</p>`
+      + `<p class="ac-perg">${pergunta ? esc(pergunta) : `Escreva ou fale sobre a tela <b>${esc(nomeTela(rotaAtual()))}</b>. Se ajudar, tire um print e marque o que você quer mostrar.`}</p>`
       + `<div class="ac-chips">${TIPOS.map(([k, l]) => `<button type="button" data-tipo="${k}" class="${k === ac.tipo ? 'on' : ''}">${l}</button>`).join('')}</div>`
       + '<textarea id="ac-texto" rows="4" placeholder="O que você quer dizer?"></textarea>'
       + '<div class="ac-linha"><button type="button" id="ac-mic">🎤 Falar</button></div>'
-      + '<div id="ac-print"></div><div class="ac-mut" style="margin-top:4px">Fundos de imagem podem sair em branco no print.</div>'
+      + '<div id="ac-print"></div>'
       + '<div class="ac-linha"><button type="button" id="ac-enviar" class="ac-pri">Enviar</button></div><div id="ac-ok" hidden></div>';
     bx.hidden = false;
     bx.querySelector('#ac-fechar').onclick = () => fecharCaixa('fechou');
@@ -336,7 +422,7 @@ const Ditado = {
     bx.querySelector('#ac-mic').onclick = alternarVoz;
     bx.querySelector('#ac-enviar').onclick = enviar;
     setTimeout(() => { const t = $id('ac-texto'); if (t) t.focus(); }, 50);
-    tirarPrint();
+    ac.print = null; desenharPrint();
   }
   A.abrirCaixa = abrirCaixa;
   async function enviar() {
@@ -378,8 +464,8 @@ const Ditado = {
       slot.className = 'ac-card';
       slot.innerHTML = '<div class="ac-card-corpo"><h3>Tem alguém do seu lado anotando 💬</h3><ul>'
         + '<li><b>O botão 💬</b> no canto da tela abre a caixa de escrever, em cima da tela em que você está.</li>'
-        + '<li><b>Escreva ou fale:</b> o microfone dita para você, e o sistema tira um print da tela para a equipe ver o que você viu.</li>'
-        + '<li><b>De vez em quando o balão pergunta</b> como está indo: na primeira vez em uma tela, ou quando algo não respondeu como esperado.</li>'
+        + '<li><b>Escreva ou fale:</b> o microfone dita para você, e dá para tirar um print, escolher a área e marcar em cima.</li>'
+        + '<li><b>De vez em quando o balão pergunta</b> como está indo, quando algo não respondeu como esperado.</li>'
         + '<li><b>Tudo vai para a aba Sugestões,</b> e a resposta chega por lá.</li></ul>'
         + '<p class="ac-mut">O sistema anota quais telas você abre e onde clica, só para melhorar o Flow. Ele <b>nunca</b> anota o que você digita nos campos.</p>'
         + '<div class="ac-card-bt"><button type="button" id="ac-card-exp" class="ac-pri">💬 Experimentar agora</button><button type="button" id="ac-card-ok">Entendi</button></div></div>'
@@ -421,7 +507,20 @@ const Ditado = {
     .ac-d-balao i{ display:block; height:7px; border-radius:4px; background:#d9ddf0; margin-bottom:7px; } .ac-d-balao i:last-child{ width:60%; }
     .ac-d-btn{ position:absolute; right:6px; bottom:0; width:40px; height:40px; border-radius:50%; background:var(--brand); color:#fff; display:flex; align-items:center; justify-content:center; }
     #toasts{ right:18px; }
-    @media print{ #ac-root, #ac-versao, .ac-card{ display:none !important; } }
+    #ac-sel{ position:fixed; inset:0; z-index:395; background:rgba(10,15,30,.35); cursor:crosshair; }
+    .ac-sel-bar{ position:fixed; top:12px; left:50%; transform:translateX(-50%); background:#fff; color:#111; border-radius:12px; padding:10px 14px; box-shadow:0 10px 30px rgba(0,0,0,.35); font:13px var(--f-ui); display:flex; gap:8px; align-items:center; flex-wrap:wrap; cursor:default; max-width:92vw; }
+    .ac-sel-bar button, .ac-ed-barra button, .ac-ed-rod button{ border:1px solid var(--border); background:#fff; color:#111; border-radius:999px; padding:5px 12px; font:500 12.5px var(--f-ui); cursor:pointer; }
+    .ac-sel-r{ position:fixed; border:3px solid #f59e0b; background:rgba(255,255,255,.08); box-shadow:0 0 0 9999px rgba(10,15,30,.45); pointer-events:none; }
+    #ac-ed{ position:fixed; inset:0; z-index:400; background:rgba(10,15,30,.8); display:flex; flex-direction:column; font-family:var(--f-ui); }
+    .ac-ed-barra{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; padding:10px 14px; background:#fff; color:#111; border-bottom:1px solid var(--border); } .ac-ed-barra b{ margin-right:8px; }
+    .ac-ed-barra button.on{ background:var(--brand-soft); border-color:var(--brand); color:var(--brand); font-weight:700; }
+    .ac-ed-area{ flex:1; min-height:0; display:flex; align-items:center; justify-content:center; padding:12px; overflow:auto; }
+    #ac-ed-c{ max-width:100%; max-height:calc(100vh - 200px); background:#fff; border-radius:6px; box-shadow:0 10px 40px rgba(0,0,0,.45); cursor:crosshair; touch-action:none; }
+    .ac-ed-rod{ background:#fff; padding:10px 14px; display:flex; gap:10px; align-items:flex-end; flex-wrap:wrap; border-top:1px solid var(--border); }
+    #ac-ed-txt{ flex:1; min-width:240px; border:1px solid var(--border); border-radius:8px; padding:8px; font:inherit; font-size:13px; resize:vertical; }
+    .ac-ed-rod .ac-pri{ background:var(--brand); color:#fff; border-color:var(--brand); font-weight:700; }
+    .ac-ed-in{ position:fixed; z-index:410; border:2px solid #e11d2e; border-radius:6px; padding:5px 8px; font:700 15px var(--f-ui); color:#e11d2e; background:#fff; min-width:220px; }
+    @media print{ #ac-root, #ac-versao, .ac-card, #ac-sel, #ac-ed{ display:none !important; } }
     @media (max-width:760px){ #ac-root{ bottom:78px; right:12px; } .ac-desenho{ display:none; } #ac-box, #ac-bubble{ width:calc(100vw - 32px); } }`;
   document.head.appendChild(css);
 

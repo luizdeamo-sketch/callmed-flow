@@ -64,7 +64,7 @@
   .ok-msg{ color:var(--green); font-size:12.5px; margin-top:10px;}
 
   /* ---------- shell ---------- */
-  #app{ display:none; height:100vh; grid-template-columns: 76px 1fr; grid-template-rows: 60px 1fr; }
+  #app{ display:none; height:100vh; grid-template-columns: 76px minmax(0,1fr); grid-template-rows: 60px 1fr; }
   #app.active{ display:grid; }
   header{ grid-column:1/3; background:var(--surface); display:flex; align-items:center; justify-content:space-between; padding:0 20px; z-index:5; border-bottom:1px solid var(--border); gap:12px;}
   header .brand{ font-family:var(--f-ui); font-weight:700; font-size:1rem; display:flex; align-items:center; gap:9px;}
@@ -413,6 +413,12 @@
   .sg-fchip img{ width:38px; height:38px; object-fit:cover; border-radius:5px;} .sg-fchip .nm{ max-width:160px; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;}
   .sg-fchip button{ border:none; background:transparent; cursor:pointer; color:var(--ink-faint);}
   .sg-atts{ display:flex; flex-wrap:wrap; gap:10px; margin-top:10px; align-items:center;}
+  .sg-ret{ display:flex; gap:8px; align-items:center; flex-wrap:wrap; margin:8px 0; padding:8px 10px; border-radius:var(--radius-sm); background:var(--brand-soft); font-size:13px;}
+  .sg-ret span{ font-weight:600; margin-right:4px;} .sg-ret.ok{ background:var(--green-soft); color:var(--green); font-weight:600;}
+  .sg-aviso{ display:flex; gap:14px; align-items:center; justify-content:space-between; flex-wrap:wrap; margin:0 0 14px; padding:12px 16px; border-radius:var(--radius-md); background:var(--brand-soft); border:1px solid var(--brand-line);}
+  .sg-aviso p{ margin:4px 0 0; font-size:13.5px; color:var(--ink-soft);} .sg-aviso .sg-aviso-resp{ color:var(--ink); font-weight:500;}
+  .sg-aviso-bt{ display:flex; gap:8px; flex-wrap:wrap; align-items:center;}
+  #rail .nav-btn{ position:relative;} .sg-badge{ position:absolute; top:4px; right:10px; min-width:16px; height:16px; padding:0 4px; border-radius:8px; background:var(--red); color:#fff; font:700 10px/16px var(--f-ui); font-style:normal; text-align:center;}
   .sg-thumb{ max-width:220px; max-height:150px; border:1px solid var(--border); border-radius:8px; display:block; background:#f2f3f9; min-width:60px; min-height:40px;}
   .sg-file{ border:1px solid var(--border); border-radius:var(--radius-sm); padding:6px 10px; font-size:12.5px; color:var(--brand); text-decoration:none; font-weight:600;}
   .dz{ border:2px dashed #c9cff0; background:var(--brand-soft); border-radius:var(--radius-md); padding:16px; text-align:center; color:var(--ink-soft); font-size:13px; cursor:pointer;}
@@ -436,7 +442,7 @@
   .login-card .logo{ height:28px; margin-bottom:26px;}
 
   /* cabeçalho e menu lateral */
-  #app{ grid-template-columns:72px 1fr; grid-template-rows:56px 1fr;}
+  #app{ grid-template-columns:72px minmax(0,1fr); grid-template-rows:56px 1fr;}
   header{ padding:0 20px 0 18px; border-bottom-color:var(--border);}
   header .brand{ gap:12px;}
   header .brand img{ height:22px;}
@@ -632,7 +638,7 @@
   .btn-lg{ height:42px; font-size:14px; margin-top:6px;}
   .gate-split .gs-side{ flex:1 1 480px; background:#0b1240; color:#fff; padding:56px; display:flex; flex-direction:column; justify-content:flex-end; gap:10px;}
   .gs-k{ font-size:13px; color:#9ea7e6; font-weight:500;}
-  .gs-quote{ margin:0; font-size:28px; line-height:1.3; font-weight:500; letter-spacing:-.02em; max-width:460px;}
+  .gs-quote{ margin:0; font-size:28px; line-height:1.3; font-weight:500; letter-spacing:-.02em;}
   @media (max-width: 900px){ .gate-split .gs-side{ display:none;} }
 
   /* barra do Fluxo em duas linhas */
@@ -646,7 +652,7 @@
   .hj-kpis{ display:grid; grid-template-columns:repeat(4,minmax(0,1fr)); gap:10px; margin-bottom:14px;}
   @media (max-width: 760px){ .hj-kpis{ grid-template-columns:repeat(2,minmax(0,1fr));} }
   .btn-dark{ background:var(--ink); color:#fff; border-color:var(--ink);} .btn-dark:hover{ background:#000;}
-  .hj-page{ max-width:1040px; margin:0 auto;}
+  .hj-page{ width:100%;}
   .op-sumcell.clk{ color:var(--ink);} .op-sumcell.clk:hover{ color:var(--brand);}
   .hist .it .ic{ color:var(--ink-faint); vertical-align:-2px; margin-right:2px;}
   .seg-toggle button{ height:26px;}
@@ -657,10 +663,15 @@
     #view-medico.active, .view.pgview{ padding:12px;}
   }
   @media (max-width: 760px){
-    #app{ grid-template-columns: 1fr; grid-template-rows: 56px 1fr 60px;}
+    #app{ grid-template-columns: minmax(0,1fr); grid-template-rows: 56px minmax(0,1fr) 60px;}
     #rail{ grid-row:3; flex-direction:row; justify-content:space-around; padding:0; border-right:none; border-top:1px solid var(--border); overflow-x:auto;}
     header{ grid-column:1; padding:0 12px;}
-    .hdr-sub, .who .chip{ display:none;}
+    .hdr-sub, .who .chip, .who-email, #btn-tour{ display:none;}
+    header .brand{ min-width:0; overflow:hidden; white-space:nowrap; text-overflow:ellipsis;} header .who{ flex:none; gap:2px;}
+    .view-container, .view{ min-width:0;}
+    .pg-head .right{ flex-wrap:wrap; margin-left:0;}
+    .panel:has(> table.t){ overflow-x:auto;} .panel > table.t{ min-width:520px;}
+    .hbar{ min-width:0;} .hbar .n{ white-space:normal;}
     .view{ padding:14px 12px;}
     .form-grid{ grid-template-columns:1fr;}
   }
@@ -765,17 +776,17 @@
 
 <script>window.FLOW_DEMO = new URLSearchParams(location.search).has('demo');</script>
 <script>window.FLOW_FALHAS = []; window.addEventListener('error', function (e) { var t = e.target; if (t && t.tagName === 'SCRIPT') window.FLOW_FALHAS.push(String(t.src).split('/').pop().split('?')[0]); }, true);</script>
-<script src="config.js?v=20261027173801"></script>
-<script src="js/core.js?v=20261027173801"></script>
-<script src="js/hoje.js?v=20261027173801"></script>
-<script src="js/fluxo.js?v=20261027173801"></script>
-<script src="js/doctor.js?v=20261027173801"></script>
-<script src="js/rqe.js?v=20261027173801"></script>
-<script src="js/reports.js?v=20261027173801"></script>
-<script src="js/sugestoes.js?v=20261027173801"></script>
-<script src="js/admin.js?v=20261027173801"></script>
-<script src="js/acompanhante.js?v=20261027173801"></script>
-<script src="js/novidades.js?v=20261027173801"></script>
-<script>if (window.FLOW_DEMO) document.write('<script src="js/demo.js?v=20261027173801"><\/script><script src="js/demo-tour.js?v=20261027173801"><\/script>');</script>
+<script src="config.js?v=20261027191406"></script>
+<script src="js/core.js?v=20261027191406"></script>
+<script src="js/hoje.js?v=20261027191406"></script>
+<script src="js/fluxo.js?v=20261027191406"></script>
+<script src="js/doctor.js?v=20261027191406"></script>
+<script src="js/rqe.js?v=20261027191406"></script>
+<script src="js/reports.js?v=20261027191406"></script>
+<script src="js/sugestoes.js?v=20261027191406"></script>
+<script src="js/admin.js?v=20261027191406"></script>
+<script src="js/acompanhante.js?v=20261027191406"></script>
+<script src="js/novidades.js?v=20261027191406"></script>
+<script>if (window.FLOW_DEMO) document.write('<script src="js/demo.js?v=20261027191406"><\/script><script src="js/demo-tour.js?v=20261027191406"><\/script>');</script>
 </body>
 </html>

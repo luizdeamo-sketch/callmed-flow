@@ -4,6 +4,15 @@
 /** Mais recente primeiro. `id` só cresce; a pessoa vê as versões com id maior que a última que ela já viu. */
 const NOVIDADES = [
   {
+    id: 6, data: '27/10', titulo: 'Sugestões com retorno e print marcado',
+    itens: [
+      ['A resposta chega até você', 'Quando a gestão responde a sua sugestão, o aviso aparece na tela de onde ela saiu e o menu Sugestões mostra um número. Clique em "Ficou bom" ou "Ainda não ficou".'],
+      ['Print do jeito que você quer', 'No balão 💬, "Tirar print e marcar": escolha a área (ou outra janela), risque, desenhe um retângulo ou escreva em cima.'],
+      ['Suas sugestões são suas', 'Cada sugestão só aparece para quem a criou e para a gestão.'],
+      ['Telas na largura toda', 'O Flow agora usa a tela inteira, do celular ao monitor grande.'],
+    ],
+  },
+  {
     id: 5, data: '27/10', titulo: 'Filtro por data de cadastro',
     itens: [
       ['Cadastrados de … até …', 'Em Filtros, escolha as datas para ver só os médicos cadastrados naquele período. Junto com o filtro de hospital, separa os cadastros novos dos antigos.'],

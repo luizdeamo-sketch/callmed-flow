@@ -38,7 +38,7 @@ function renderSugestoes() {
   if (!root.dataset.built) {
     root.dataset.built = '1';
     root.innerHTML = `
-      <div class="pg-head"><h2>Sugestões de melhoria</h2><span class="sub">Ideias, problemas e pedidos para o sistema. Tudo fica registrado no histórico.</span></div>
+      <div class="pg-head"><h2>Sugestões de melhoria</h2><span class="sub">Ideias, problemas e pedidos para o sistema. ${S.isAdmin ? 'Como gestor, você vê as sugestões de todos.' : 'Só você e a gestão veem as suas sugestões; a resposta aparece aqui e na tela de onde ela saiu.'}</span></div>
       <div class="es-box">
         <div class="sg-row" style="margin-bottom:8px"><span class="ql" style="margin:0">Registrando como</span><b>${esc(actorName())}</b></div>
         <textarea id="sg-text" rows="4" placeholder="Escreva livremente, ou clique em Gravar e narre a sua ideia. Dá para colar um print (Ctrl+V) ou arrastar arquivos para cá."></textarea>
@@ -67,6 +67,78 @@ async function loadSugestoes() {
   if (error) { $('#sg-list').innerHTML = `<div class="op-more">Erro: ${esc(error.message)}</div>`; return; }
   SG.list = data || [];
   sgDraw();
+  sgMarcaVistas();
+}
+
+// ---------- retorno para quem sugeriu (skill balao-e-sugestoes) ----------
+// Regra do banco: cada um só vê as próprias sugestões; os administradores (gestão) veem todas.
+const sgSouAutor = (r) => !!S.user && r.autor_id === S.user.id;
+const SG_VIEW_DA_ROTA = { medico: 'fluxo' };
+function sgRetornoHtml(r) {
+  if (r.retorno) return `<div class="sg-ret ok">${r.retorno === 'ficou_bom' ? `👍 ${sgSouAutor(r) ? 'Você marcou' : 'Quem sugeriu'}: ficou bom` : `↩ ${sgSouAutor(r) ? 'Você marcou' : 'Quem sugeriu'}: ainda não ficou (voltou para análise)`}</div>`;
+  if (!r.resposta || !sgSouAutor(r)) return '';
+  return '<div class="sg-ret"><span>Isso resolveu?</span><button class="btn btn-primary btn-sm" data-act="ret-bom">👍 Ficou bom</button><button class="btn btn-line btn-sm" data-act="ret-nao">Ainda não ficou</button></div>';
+}
+async function sgRetorno(r, valor) {
+  let nota = null;
+  if (valor === 'nao_ficou') {
+    nota = await new Promise((ok) => {
+      const m = openModal(`<div class="modal-head"><h2>O que ainda não ficou?</h2><button class="x" data-close>✕</button></div>
+        <div class="modal-body"><div class="field"><label>Conta rapidinho (opcional)</label><textarea class="inp" id="sgr-nota" rows="3" placeholder="Ex.: o filtro ainda traz os cadastros antigos"></textarea></div></div>
+        <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="sgr-ok">Enviar</button></div>`, { size: 'sm', onClose: () => ok(undefined) });
+      $('#sgr-ok', m.el).onclick = () => { const v = $('#sgr-nota', m.el).value.trim(); ok(v); m.close(); };
+    });
+    if (nota === undefined) return false;
+  }
+  const { error } = await sb.rpc('flow_sugestao_retorno', { p_id: r.id, p_retorno: valor, p_nota: nota || null });
+  if (error) { toast(friendlyDbError(error, 'Erro ao registrar'), 'err'); return false; }
+  toast(valor === 'ficou_bom' ? 'Obrigado! Anotado que ficou bom.' : 'Anotado. A sugestão voltou para análise.', 'ok');
+  if (window.ACOMP && ACOMP.uso) ACOMP.uso('clique', 'retorno sugestão', { valor });
+  r.retorno = valor; r.resposta_vista_em = r.resposta_vista_em || new Date().toISOString();
+  if (currentView === 'sugestoes') loadSugestoes();
+  sgRetornoCarrega();
+  return true;
+}
+// respostas que quem sugeriu ainda não avaliou: contador no menu e aviso na tela de origem
+const SGR = { pend: [] };
+async function sgRetornoCarrega() {
+  if (!S.user || window.FLOW_DEMO) return;
+  const { data, error } = await sb.from('flow_sugestoes').select('id,texto,resposta,status,tela,contexto,autor_id,retorno,resposta_vista_em')
+    .not('resposta', 'is', null).is('retorno', null).eq('autor_id', S.user.id).order('atualizado_em', { ascending: false }).limit(50);
+  if (error) return;
+  SGR.pend = (data || []).filter((x) => String(x.resposta || '').trim());
+  const b = document.querySelector('#rail .nav-btn[data-view="sugestoes"]');
+  if (b) {
+    let n = b.querySelector('.sg-badge'); const novas = SGR.pend.filter((x) => !x.resposta_vista_em).length;
+    if (novas) { if (!n) { n = document.createElement('i'); n.className = 'sg-badge'; b.appendChild(n); } n.textContent = novas; b.title = novas + ' resposta(s) nova(s) para você'; }
+    else if (n) { n.remove(); b.title = 'Sugestões de melhoria do sistema'; }
+  }
+  sgRetornoNaTela();
+}
+function sgRetornoNaTela() {
+  document.getElementById('sg-aviso')?.remove();
+  const view = typeof currentView !== 'undefined' ? currentView : '';
+  if (!view || view === 'sugestoes') return;
+  const daTela = (x) => { const seg = String((x.contexto && x.contexto.rota) || '').split('/')[1] || ''; return (SG_VIEW_DA_ROTA[seg] || seg) === view; };
+  const r = SGR.pend.find(daTela); if (!r) return;
+  const host = document.getElementById('view-' + view); if (!host) return;
+  const d = document.createElement('div'); d.id = 'sg-aviso'; d.className = 'sg-aviso';
+  d.innerHTML = `<div><b>💬 Respondemos a sua sugestão sobre esta tela</b><p>"${esc((r.texto || '').slice(0, 140))}${(r.texto || '').length > 140 ? '…' : ''}"</p><p class="sg-aviso-resp">${esc((r.resposta || '').replace(/^🔴\s*/, ''))}</p></div>
+    <div class="sg-aviso-bt"><button class="btn btn-primary btn-sm" data-ret="ficou_bom">👍 Ficou bom</button><button class="btn btn-line btn-sm" data-ret="nao_ficou">Ainda não ficou</button><button class="btn-ghost" data-ret="fechar" title="Ver depois na aba Sugestões">Depois</button></div>`;
+  host.prepend(d);
+  if (!r.resposta_vista_em) { r.resposta_vista_em = new Date().toISOString(); sb.rpc('flow_sugestao_retorno', { p_id: r.id, p_retorno: null }).then(() => sgRetornoCarrega()); }
+  d.addEventListener('click', async (e) => {
+    const b = e.target.closest('[data-ret]'); if (!b) return;
+    if (b.dataset.ret === 'fechar') { d.remove(); return; }
+    if (await sgRetorno(r, b.dataset.ret)) d.remove();
+  });
+}
+document.addEventListener('flow-tela', () => setTimeout(sgRetornoNaTela, 300));
+// ao abrir a aba Sugestões, as respostas exibidas contam como vistas
+async function sgMarcaVistas() {
+  const novas = SG.list.filter((x) => x.resposta && sgSouAutor(x) && !x.resposta_vista_em);
+  for (const r of novas) { r.resposta_vista_em = new Date().toISOString(); await sb.rpc('flow_sugestao_retorno', { p_id: r.id, p_retorno: null }); }
+  if (novas.length) sgRetornoCarrega();
 }
 
 function sgDraw() {
@@ -86,7 +158,8 @@ function sgDraw() {
       ${(r.anexos || []).length ? `<div class="sg-atts">${r.anexos.map((a) => (/^image\//.test(a.mime || '') ? `<a href="#" data-att="${esc(a.path)}" title="${esc(a.nome || '')}"><img class="sg-thumb" data-thumb="${esc(a.path)}" alt="${esc(a.nome || 'print')}"></a>` : `<a href="#" class="sg-file" data-att="${esc(a.path)}">📄 ${esc(a.nome || 'arquivo')}</a>`)).join('')}</div>` : ''}
       ${r.audio_path ? '<div class="sg-audio"><a href="#" data-act="audio">▶ ouvir o áudio original</a></div>' : ''}
       ${r.resposta ? `<div class="sg-resp" ${aguardando ? 'style="background:#fde8e8;border:2px solid var(--red)"' : ''}><b>Resposta:</b> ${esc(r.resposta).replace(/\n/g, '<br>')}</div>` : ''}
-      <div class="sg-actions"><button class="btn btn-line btn-sm" data-act="status">Alterar status / responder</button><button class="btn-ghost" data-act="hist">Histórico (${hist.length})</button>${S.isAdmin ? '<button class="btn-ghost" data-act="del" style="color:var(--red);margin-left:auto">Excluir</button>' : ''}</div>
+      ${sgRetornoHtml(r)}
+      <div class="sg-actions">${S.isAdmin ? '<button class="btn btn-line btn-sm" data-act="status">Alterar status / responder</button>' : ''}<button class="btn-ghost" data-act="hist">Histórico (${hist.length})</button>${S.isAdmin ? '<button class="btn-ghost" data-act="del" style="color:var(--red);margin-left:auto">Excluir</button>' : ''}</div>
       <div class="sg-hist" hidden>${hist.length ? hist.slice().reverse().map((h) => `<div class="rec"><span class="k">${fmtDate(h.em, true)}</span><b>${esc(h.por || '—')}</b>: ${esc(sgLabel(h.de)[1])} → <b>${esc(sgLabel(h.para)[1])}</b>${h.nota ? '<br>' + esc(h.nota) : ''}${h.anexos ? `<br><span class="muted small">📎 ${h.anexos} anexo(s)</span>` : ''}</div>`).join('') : '<div class="muted small">Sem movimentações ainda.</div>'}</div>
     </div>`;
   }).join('') : '<div class="op-more">Nenhuma sugestão nesta seleção.</div>';
@@ -102,6 +175,7 @@ function sgDraw() {
       try { a.parentElement.innerHTML = `<audio controls autoplay src="${await docsSignedUrl(r.audio_path)}"></audio>`; } catch (x) { toast('Erro: ' + x.message, 'err'); }
     }
     if (a.dataset.act === 'status') sgStatusDialog(r);
+    if (a.dataset.act === 'ret-bom' || a.dataset.act === 'ret-nao') await sgRetorno(r, a.dataset.act === 'ret-bom' ? 'ficou_bom' : 'nao_ficou');
     if (a.dataset.act === 'del') {
       if (!(await confirmDlg('Excluir sugestão', 'Excluir esta sugestão e o histórico dela?', { okText: 'Excluir', danger: true }))) return;
       const { error } = await sb.from('flow_sugestoes').delete().eq('id', r.id);
@@ -251,7 +325,7 @@ function sgStatusDialog(r) {
       status: para,
       historico: (r.historico || []).concat([{ em: new Date().toISOString(), por, de: r.status, para, nota: nota || null, anexos: novos.length || undefined }]),
     };
-    if (nota) upd.resposta = nota;
+    if (nota) Object.assign(upd, { resposta: nota, retorno: null, retorno_em: null, resposta_vista_em: null }); // resposta nova: quem sugeriu avalia de novo
     if (novos.length) upd.anexos = (r.anexos || []).concat(novos);
     const { error } = await sb.from('flow_sugestoes').update(upd).eq('id', r.id);
     if (error) { toast('Erro: ' + error.message, 'err'); btn.disabled = false; btn.textContent = 'Salvar'; return; }
