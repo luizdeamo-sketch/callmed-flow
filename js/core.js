@@ -404,6 +404,23 @@ async function loadNotifs() {
   const { data } = await sb.from('flow_notifications').select('*').eq('user_id', S.user.id).order('created_at', { ascending: false }).limit(50);
   S.notifs = data || [];
   renderBell();
+  mostrarRecados();
+}
+/** Recado em destaque (flow_notifications.destaque): abre numa janela quando a pessoa entra e só sai do caminho com "Entendi". */
+let recadoAberto = false;
+function mostrarRecados(tentativa = 0) {
+  if (recadoAberto) return;
+  const r = (S.notifs || []).find((n) => n.destaque && !n.read);
+  if (!r) return;
+  if (document.querySelector('.modal-bg')) { if (tentativa < 120) setTimeout(() => mostrarRecados(tentativa + 1), 1000); return; } // espera as Novidades fecharem
+  recadoAberto = true;
+  const d = r.doctor_id && S.doctors.find((x) => x.id === r.doctor_id);
+  const m = openModal(`<div class="modal-head"><div><h2>Recado para você</h2><div class="om-sub">De ${esc(r.created_by_name || 'CallMed')} · ${fmtDate(r.created_at, true)}</div></div></div>
+    <div class="modal-body"><div style="white-space:pre-wrap;font-size:14.5px;line-height:1.55">${esc(r.message)}</div></div>
+    <div class="modal-foot">${d ? '<button class="btn btn-line" id="rc-ficha">Abrir a ficha do médico</button>' : ''}<button class="btn btn-primary" id="rc-ok">Entendi</button></div>`, { size: 'sm', onClose: () => { recadoAberto = false; } }); // fechar sem "Entendi" mantém o recado para a próxima entrada
+  const lido = () => { r.read = true; sb.from('flow_notifications').update({ read: true }).eq('id', r.id).then(); renderBell(); if (window.ACOMP && ACOMP.uso) ACOMP.uso('clique', 'recado lido'); };
+  $('#rc-ok', m.el).onclick = () => { lido(); m.close(); setTimeout(mostrarRecados, 400); };
+  const f = $('#rc-ficha', m.el); if (f) f.onclick = () => { lido(); m.close(); openDoctor(d); };
 }
 function renderBell() {
   const unread = S.notifs.filter((n) => !n.read).length;
@@ -450,7 +467,7 @@ function subscribeNotifs() {
       S.notifs = S.notifs.slice(0, 50);
       renderBell();
       beep();
-      toast(p.new.message, '', p.new.created_by_name || 'Usuário');
+      if (p.new.destaque) mostrarRecados(); else toast(p.new.message, '', p.new.created_by_name || 'Usuário');
     }).subscribe();
 }
 

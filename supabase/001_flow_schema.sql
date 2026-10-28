@@ -698,3 +698,6 @@ begin
     from public.flow_profiles p where p.ativo and p.user_id <> new.created_by;
   return new;
 end $function$;
+
+-- ---------- migração 17 (28/10/2026): recado em destaque (abre numa janela ao entrar; some com "Entendi") ----------
+alter table public.flow_notifications add column if not exists destaque boolean not null default false;
