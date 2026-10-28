@@ -794,15 +794,15 @@ function renderIndicadores() {
       <span class="right"><button class="btn btn-line btn-sm" data-goview="relatorios">${ic('file', 14)}Relatórios detalhados</button><select class="inp" id="ind-h" style="width:260px"><option value="">Todos os hospitais</option>${hospitals.map((h) => `<option ${IND.hospital === h ? 'selected' : ''}>${esc(h)}</option>`).join('')}</select></span></div>
     <div class="kpis">
       <div class="kpi"><span class="l">Cadastros</span><span class="v">${total}</span><span class="s">${open.length} em andamento</span></div>
-      <div class="kpi click" data-kgo="${esc(JSON.stringify({ ...hf, stage: 'aprovado' }))}"><span class="l">Aprovados</span><span class="v" style="color:var(--green)">${apr}</span><span class="s">${apr + rep ? Math.round((apr / (apr + rep)) * 100) : 0}% de aprovação</span></div>
+      <div class="kpi click" data-kgo="${esc(JSON.stringify({ ...hf, stage: 'aprovado' }))}"><span class="l">Aprovados</span><span class="v" style="color:var(--green)">${apr}</span><span class="s">${apr + rep ? Math.round((apr / (apr + rep)) * 100) : 0}% de aprovação (desde o início)</span></div>
       <div class="kpi click" data-kgo="${esc(JSON.stringify({ ...hf, stage: 'reprovado' }))}"><span class="l">Reprovados</span><span class="v" style="color:var(--red)">${rep}</span></div>
-      <div class="kpi"><span class="l">SLA em dia</span><span class="v" style="color:${slaPct >= 80 ? 'var(--green)' : slaPct >= 50 ? 'var(--amber)' : 'var(--red)'}">${slaPct}%</span><div class="ind-bar"><div style="width:${slaPct}%;background:var(--green)"></div></div></div>
+      <div class="kpi" title="Médicos em andamento com o prazo da etapa em dia, agora"><span class="l">SLA em dia agora</span><span class="v" style="color:${slaPct >= 80 ? 'var(--green)' : slaPct >= 50 ? 'var(--amber)' : 'var(--red)'}">${slaPct}%</span><div class="ind-bar"><div style="width:${slaPct}%;background:var(--green)"></div></div></div>
       <div class="kpi click" data-kgo="${esc(JSON.stringify({ ...hf, slaVencido: true }))}"><span class="l">SLA vencido</span><span class="v" style="color:var(--red)">${urgent}</span><span class="s">${warning} em alerta</span></div>
       <div class="kpi click" data-kgo="${esc(JSON.stringify({ ...hf, priority: 'urgente' }))}"><span class="l">Urgentes</span><span class="v">${open.filter((d) => d.priority === 'urgente').length}</span></div>
     </div>
     <div class="grid-3">
       <div class="es-box"><div class="ql">Funil — médicos em cada etapa</div>${hbars(funnel)}</div>
-      <div class="es-box"><div class="ql">Tempo médio na etapa atual × SLA (horas úteis)</div>${hbars(tempo)}</div>
+      <div class="es-box"><div class="ql" title="Quanto tempo os médicos que estão em cada etapa hoje já estão nela. O tempo que as etapas levaram num período fica em Relatórios.">Há quanto tempo estão na etapa atual × SLA (horas úteis)</div>${hbars(tempo)}</div>
       <div class="es-box"><div class="ql">Em andamento por hospital</div>${hbars(byHosp, 'var(--brand)')}</div>
       <div class="es-box"><div class="ql">Setores</div>${hbars(topSet, 'var(--teal-deep)')}</div>
       <div class="es-box"><div class="ql">DISC</div>${hbars(DISC.map((k) => ({ l: DISC_LABEL[k], go: { ...hf, disc: k }, v: list.filter((d) => d.disc === k).length, c: k === 'ADERENTE' ? 'var(--green)' : k === 'REPROVADO' ? 'var(--red)' : k === 'AGUARDANDO RETORNO' ? '#e0a94f' : 'var(--ink-faint)' })))}</div>

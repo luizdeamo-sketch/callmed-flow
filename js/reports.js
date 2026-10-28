@@ -191,12 +191,12 @@ function drawReports(acts, rqes) {
       <button class="btn btn-line btn-sm" id="rf-csv" title="Baixa em CSV a aba que está aberta">${ic('download', 14)}CSV desta aba</button><button class="btn btn-line btn-sm" id="rf-xlsx" title="Um Excel com todas as abas">${ic('download', 14)}Excel (todas as abas)</button>
     </div>
     <div class="kpis">
-      <div class="kpi"><div class="l">Médicos no período</div><div class="v">${rep.entered}</div></div>
-      <div class="kpi"><div class="l">Aprovados</div><div class="v" style="color:var(--green)">${rep.apr}</div></div>
-      <div class="kpi"><div class="l">Reprovados</div><div class="v" style="color:var(--red)">${rep.rep}</div></div>
-      <div class="kpi"><div class="l">Conversão</div><div class="v">${rep.conv}%</div></div>
+      <div class="kpi"><div class="l">Entraram no período</div><div class="v">${rep.entered}</div><div class="s">cadastros novos</div></div>
+      <div class="kpi"><div class="l">Aprovados no período</div><div class="v" style="color:var(--green)">${rep.apr}</div></div>
+      <div class="kpi"><div class="l">Reprovados no período</div><div class="v" style="color:var(--red)">${rep.rep}</div></div>
+      <div class="kpi"><div class="l">Conversão</div><div class="v">${rep.conv}%</div><div class="s">aprovados ÷ entraram no período</div></div>
       <div class="kpi"><div class="l">Tempo médio aprovação</div><div class="v">${rep.tApr}h</div><div class="s">horas úteis</div></div>
-      <div class="kpi"><div class="l">Conformidade SLA</div><div class="v" style="color:${rep.conf >= 80 ? 'var(--green)' : rep.conf >= 50 ? 'var(--amber)' : 'var(--red)'}">${rep.conf}%</div></div>
+      <div class="kpi" title="Médicos e RQE em andamento com o prazo da etapa em dia, agora (não depende do período)"><div class="l">SLA em dia agora</div><div class="v" style="color:${rep.conf >= 80 ? 'var(--green)' : rep.conf >= 50 ? 'var(--amber)' : 'var(--red)'}">${rep.conf}%</div></div>
     </div>
     <div class="tabs">${tabs.map(([k, l]) => `<button data-rtab="${k}" class="${RF.tab === k ? 'active' : ''}">${esc(l)}</button>`).join('')}</div>
     ${body}`;

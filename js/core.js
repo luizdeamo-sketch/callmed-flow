@@ -504,6 +504,7 @@ document.addEventListener('click', (e) => { const b = e.target.closest('[data-go
 
 async function reloadAll(silent) {
   const btn = $('#btn-reload');
+  if (!silent && typeof ACTS !== 'undefined') ACTS = null; // recarregar na mão busca também o histórico na hora
   btn.disabled = true;
   try {
     await loadCore();
