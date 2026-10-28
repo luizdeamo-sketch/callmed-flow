@@ -63,6 +63,7 @@ function renderSugestoes() {
 VIEWS.sugestoes = renderSugestoes;
 
 async function loadSugestoes() {
+  if (!document.getElementById('sg-list')) return; // a tela ainda não foi montada (ex.: chamada pelo balão ou pelo retorno)
   const { data, error } = await sb.from('flow_sugestoes').select('*').order('created_at', { ascending: false }).limit(1000);
   if (error) { $('#sg-list').innerHTML = `<div class="op-more">Erro: ${esc(error.message)}</div>`; return; }
   SG.list = data || [];
