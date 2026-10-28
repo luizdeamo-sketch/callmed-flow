@@ -273,6 +273,17 @@ const Ditado = {
   async function capturar(area) {
     area = area || {};
     if (area.url) return area.url;
+    // as telas rolam dentro de si (não a janela): a cópia que vira imagem perde a rolagem, então o conteúdo
+    // rolado é deslocado por CSS durante a captura e volta ao lugar depois
+    const rolados = [...document.querySelectorAll('#app *')].filter((el) => (el.scrollTop > 0 || el.scrollLeft > 0) && el.offsetParent !== null);
+    const desfazer = [];
+    rolados.forEach((el) => {
+      const t = el.scrollTop, l = el.scrollLeft;
+      [...el.children].forEach((c) => { desfazer.push([c, c.style.translate]); c.style.translate = `${-l}px ${-t}px`; });
+      desfazer.push(() => { el.scrollTop = t; el.scrollLeft = l; });
+      el.scrollTop = 0; el.scrollLeft = 0;
+    });
+    const volta = () => desfazer.reverse().forEach((x) => (typeof x === 'function' ? x() : (x[0].style.translate = x[1])));
     try {
       return await Promise.race([(async () => {
         const lib = await carregarLib();
@@ -281,7 +292,7 @@ const Ditado = {
           quality: 0.85, skipFonts: true, backgroundColor: '#ffffff', width: w, height: h, canvasWidth: w, canvasHeight: h, pixelRatio: 1,
           style: { transform: `translate(${-window.scrollX}px, ${-window.scrollY}px)` },
           imagePlaceholder: 'data:image/gif;base64,R0lGODlhAQABAIAAAP///wAAACH5BAEAAAAALAAAAAABAAEAAAICRAEAOw==',
-          filter: (n) => !(n.id === 'ac-root' || n.id === 'toasts' || n.id === 'ac-versao' || n.id === 'ac-sel' || n.id === 'ac-ed' || n.tagName === 'SCRIPT' || (n.classList && (n.classList.contains('dm-bar') || n.classList.contains('dm-banner') || n.classList.contains('dm-cursor') || n.classList.contains('dm-ring')))),
+          filter: (n) => !(n.id === 'ac-root' || n.id === 'toasts' || n.id === 'ac-versao' || n.id === 'ac-sel' || n.id === 'ac-ed' || n.tagName === 'SCRIPT' || (n.classList && ((n.classList.contains('view') && !n.classList.contains('active')) || n.classList.contains('screen') && n.hidden || n.classList.contains('dm-bar') || n.classList.contains('dm-banner') || n.classList.contains('dm-cursor') || n.classList.contains('dm-ring')))),
         });
         const R = area.rect; if (!R) return url;
         const img = await new Promise((ok, falha) => { const i = new Image(); i.onload = () => ok(i); i.onerror = falha; i.src = url; });
@@ -289,8 +300,8 @@ const Ditado = {
         cv.width = Math.round(R.w * k); cv.height = Math.round(R.h * k);
         cv.getContext('2d').drawImage(img, R.x * k, R.y * k, R.w * k, R.h * k, 0, 0, cv.width, cv.height);
         return cv.toDataURL('image/jpeg', 0.85);
-      })(), new Promise((_, rej) => setTimeout(() => rej(new Error('demorou')), 8000))]);
-    } catch (_) { return null; }
+      })(), new Promise((_, rej) => setTimeout(() => rej(new Error('demorou')), 12000))]);
+    } catch (_) { return null; } finally { volta(); }
   }
   // escolher o que vai no print: arrastar uma área, tela inteira ou outra janela/aba
   function escolherArea() {
@@ -384,7 +395,7 @@ const Ditado = {
   function desenharPrint() {
     const el = $id('ac-print'); if (!el) return;
     el.innerHTML = (ac.print ? `<img alt="Print da tela" src="${URL.createObjectURL(ac.print)}">` : '')
-      + `<div class="ac-linha"><button type="button" id="ac-tirar">📸 ${ac.print ? 'Tirar de novo' : 'Tirar print e marcar'}</button>${ac.print ? '<button type="button" id="ac-marcar">✏️ Marcar</button><button type="button" id="ac-semprint">Tirar o print</button>' : ''}</div>`
+      + `<div class="ac-linha"><button type="button" id="ac-tirar">📸 ${ac.print ? 'Tirar de novo' : 'Tirar print e marcar'}</button>${ac.print ? '<button type="button" id="ac-marcar">✏️ Marcar</button><button type="button" id="ac-semprint">Remover o print</button>' : ''}</div>`
       + (ac.print ? '' : '<div class="ac-mut">Opcional: você escolhe a área (ou outra janela), risca e escreve em cima, e o print vai junto.</div>');
     $id('ac-tirar').onclick = tirarPrint;
     const m = $id('ac-marcar'); if (m) m.onclick = async () => { const u = await editarPrint(URL.createObjectURL(ac.print), $id('ac-texto')); if (u) await usarPrint(u); };

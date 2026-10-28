@@ -3,7 +3,7 @@
 
 const SG_STATUS = [['nova', 'Nova', '#0018fc'], ['em_analise', 'Em análise', '#c8790b'], ['aprovada', 'Aprovada', '#149c6b'], ['em_execucao', 'Em execução', '#7b3fe4'], ['concluida', 'Concluída', '#2f9e57'], ['rejeitada', 'Rejeitada', '#c23636'], ['depois', 'Deixar para depois', '#8990a3']];
 const SG_TIPOS = { ideia: 'Ideia nova', melhoria: 'Melhoria', problema: 'Problema / erro', duvida: 'Dúvida' };
-const SG_TELAS = ['Fluxo — Jornada', 'Fluxo — Kanban', 'Ficha do médico', 'Novo médico', 'Cobranças / mensagens', 'Indicadores', 'RQE', 'Relatórios', 'Auditoria', 'Administração', 'Notificações', 'Login / acesso', 'Outro'];
+const SG_TELAS = ['Hoje', 'Fluxo — Jornada', 'Fluxo — Kanban', 'Ficha do médico', 'Novo médico', 'Cobranças / mensagens', 'Indicadores', 'RQE', 'Relatórios', 'Auditoria', 'Administração', 'Notificações', 'Login / acesso', 'Outro', 'Sugestões'];
 const SG = { list: [], filter: '', q: '', files: [], rec: null, media: null, chunks: [], audioBlob: null, recording: false, voz: false };
 const sgLabel = (k) => SG_STATUS.find((s) => s[0] === k) || [k, k, '#666'];
 

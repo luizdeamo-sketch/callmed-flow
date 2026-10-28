@@ -83,9 +83,20 @@ async function saveNextAction(d, acao, data, respId, { log = true, quiet = false
   return true;
 }
 
+/** Depois de feita uma ação, o passo natural seguinte (sem isso o Feito sugeria de novo a mesma ação). '' = nenhuma. */
+const ACAO_SEGUINTE = {
+  'Fazer primeiro contato': 'Cobrar retorno do médico',
+  'Enviar documentos ao jurídico': 'Cobrar retorno do jurídico',
+  'Enviar cadastro ao hospital (e-mail)': 'Cobrar retorno do hospital',
+  'Cobrar documentação pendente': 'Conferir documentos recebidos',
+  'Enviar link / APP': 'Cobrar retorno do médico',
+  'Coletar procuração': 'Conferir documentos recebidos',
+  'Informar resultado ao médico': '',
+  'Informar aprovação e próximos passos': '',
+};
 /** Janela "Próxima ação" (definir / concluir). Com `concluir`, registra a ação feita e pede a próxima. */
 function nextActionDialog(d, { concluir = false, onDone } = {}) {
-  const sugestao = ACAO_POR_ETAPA[d.stage] || '';
+  const sugestao = concluir && d.proxima_acao in ACAO_SEGUINTE ? ACAO_SEGUINTE[d.proxima_acao] : (ACAO_POR_ETAPA[d.stage] || '');
   const acaoAtual = d.proxima_acao || '';
   const respAtual = d.proximo_responsavel_id || S.user.id;
   const pessoas = Object.values(S.profiles).filter((p) => p.ativo).sort((a, b) => a.display_name.localeCompare(b.display_name));
@@ -178,7 +189,7 @@ function renderHoje() {
     const encaminhados = open.filter((d) => d.created_by === me && d.proximo_responsavel_id && d.proximo_responsavel_id !== me)
       .sort((a, b) => new Date(b.entry_date) - new Date(a.entry_date));
     const row = (d, right, sub) => `<div class="hj-row"><a href="#" data-openp="${d.id}">${esc(d.name)}</a> <small class="muted">· ${esc(d.hospital)}${sub ? ' · ' + sub : ''}</small><span class="hj-right">${right || ''}</span></div>`;
-    const sec = (title, cnt, html, hint) => `<div class="es-box"><div class="ql">${title} <span class="tagx" style="margin-left:6px">${cnt}</span>${hint ? `<span class="hint" style="margin:0 0 0 8px;text-transform:none;letter-spacing:0;font-family:inherit;font-weight:400">${hint}</span>` : ''}</div>${html || '<div class="hint" style="margin:0">Nada por aqui.</div>'}</div>`;
+    const sec = (title, cnt, html, hint) => `<div class="es-box"><div class="ql">${title} <span class="tagx" style="margin-left:6px">${cnt}</span>${hint ? `<span class="hint" style="margin:0 0 0 8px;text-transform:none;letter-spacing:0;font-family:inherit;font-weight:400">${hint}</span>` : ''}</div>${html ? `<div class="hj-list">${html}</div>` : '<div class="hint" style="margin:0">Nada por aqui.</div>'}</div>`;
     body.innerHTML = `
       <div class="sg-row" style="margin-bottom:14px"><div class="seg-toggle" id="hj-mine"><button data-m="1" class="${HJ.onlyMine ? 'active' : ''}">Só as minhas</button><button data-m="0" class="${HJ.onlyMine ? '' : 'active'}">Toda a equipe</button></div><span style="flex:1"></span>
         <span class="muted small">${nextCounts(false).late} atrasadas no time todo</span></div>
@@ -192,7 +203,7 @@ function renderHoje() {
         const n = daysTo(d.proxima_data);
         return `<div class="hj-row"><a href="#" data-openp="${d.id}">${esc(d.name)}</a> <small class="muted">· ${esc(d.hospital)} · ${esc(stageLabel(d.stage))}</small>
           <div class="hj-act">→ <b>${esc(d.proxima_acao)}</b>${HJ.onlyMine ? '' : ' · ' + esc(respName(d.proximo_responsavel_id))} ${n < 0 ? `<span class="tagx bad">atrasada ${-n}d</span>` : '<span class="tagx warn">hoje</span>'}
-          <span class="hj-right">${d.whatsapp ? `<a class="btn btn-line btn-sm" href="${waLink(d.whatsapp, '')}" target="_blank" rel="noopener" data-wa="${d.id}" aria-label="WhatsApp">${ic('chat', 14)}</a>` : ''}<button class="btn btn-dark btn-sm" data-done="${d.id}">${ic('check', 14)}Feito</button><button class="btn btn-line btn-sm" data-adiar="${d.id}" title="Adiar para o próximo dia útil">Amanhã</button></span></div></div>`;
+          <span class="hj-right">${d.whatsapp ? `<a class="btn btn-line btn-sm" href="${waLink(d.whatsapp, '')}" target="_blank" rel="noopener" data-wa="${d.id}" aria-label="WhatsApp">${ic('whatsapp', 14)}</a>` : ''}<button class="btn btn-dark btn-sm" data-done="${d.id}">${ic('check', 14)}Feito</button><button class="btn btn-line btn-sm" data-adiar="${d.id}" title="Adiar para o próximo dia útil">Amanhã</button></span></div></div>`;
       }).join(''))}
       ${encaminhados.length ? sec('Cadastros que encaminhei (em andamento)', encaminhados.length, encaminhados.slice(0, 40).map((d) => row(d, `<span class="tagx mute">${esc(respName(d.proximo_responsavel_id))}</span>`, `${esc(stageLabel(d.stage))} · há ${Math.floor((Date.now() - new Date(d.entry_date)) / 864e5)}d`)).join(''), 'para acompanhar sem precisar cobrar') : ''}
       ${sec('SLA vencendo (últimas horas do prazo)', slaHoje.length, slaHoje.slice(0, 40).map((d) => row(d, `<span class="slapill warning">${fmtRemaining(doctorSla(d).remaining)}</span>`, esc(stageLabel(d.stage)))).join(''), 'mova de etapa antes que vença')}

@@ -652,6 +652,12 @@ async function moveDoctor(d, toStage) {
   const st = stageById(toStage);
   let rep = null;
   if (toStage === 'reprovado') { rep = await reprovacaoDialog(d); if (!rep) return false; }
+  if (toStage === 'aprovado' && d.stage !== 'aprovado') {
+    // aprovar é definitivo para o médico: confirma e avisa se ainda há documento pendente
+    const pct = S.docProgress[d.id];
+    const aviso = pct != null && pct < 100 ? ` Atenção: os documentos estão em ${pct}% (ainda há pendências na aba Documentos).` : '';
+    if (!(await confirmDlg('Aprovar o médico', `Aprovar ${d.name} em ${d.hospital}? Isso cria a ação de informar a aprovação ao médico.${aviso}`, { okText: 'Aprovar' }))) return false;
+  }
   const patch = { stage: toStage, stage_entered_at: new Date().toISOString(), sla_hours: st?.sla_hours ?? 24 };
   // próxima ação sugerida para a nova etapa (encerrado = sem próxima ação; reprovado = comunicar o médico)
   if (rep) Object.assign(patch, { motivo_reprovacao: rep.motivo, reprovacao_origem: rep.origem, proxima_acao: rep.comunicar ? 'Informar resultado ao médico' : null, proxima_data: rep.comunicar ? ymdToday() : null, proximo_responsavel_id: rep.comunicar ? rep.resp : null });

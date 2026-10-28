@@ -37,7 +37,7 @@ function drawRqe() {
     <div class="kanban-wrap"><div class="kanban-board">${RQE_STAGES.map((s) => {
       const items = list.filter((r) => r.stage === s.id);
       return `<div class="kanban-col" data-rstage="${s.id}"><div class="kanban-col-head"><span class="cdot" style="background:${s.color}"></span>
-        <span class="lbl2">${esc(s.label)}<br><span style="text-transform:none;font-weight:500;color:var(--ink-faint);font-family:Inter">${esc(s.desc)}</span></span><span class="cnt">${items.length}</span></div>
+        <span class="lbl2">${esc(s.label)}<br><span style="text-transform:none;font-weight:500;color:var(--ink-faint)">${esc(s.desc)}</span></span><span class="cnt">${items.length}</span></div>
         <div class="kanban-col-body">${items.map(rqeCard).join('') || '<div class="empty">—</div>'}</div></div>`;
     }).join('')}</div></div>`;
   let t;

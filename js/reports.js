@@ -188,7 +188,7 @@ function drawReports(acts, rqes) {
       <select class="inp" id="rf-owner"><option value="">Todos responsáveis</option>${owners.map((o) => opt(o, S.profiles[o]?.display_name || 'Usuário removido', RF.owner)).join('')}</select>
       <select class="inp" id="rf-sla"><option value="">Status SLA: todos</option>${opt('urgent', 'Vencidos', RF.slaStatus)}${opt('warning', 'Atenção', RF.slaStatus)}${opt('ok', 'No prazo', RF.slaStatus)}</select>
       <input class="inp" id="rf-q" placeholder="Buscar médico" value="${esc(RF.q)}" style="width:160px">
-      <button class="btn btn-line btn-sm" id="rf-csv">${ic('download', 14)}CSV</button><button class="btn btn-line btn-sm" id="rf-xlsx">${ic('download', 14)}Excel</button>
+      <button class="btn btn-line btn-sm" id="rf-csv" title="Baixa em CSV a aba que está aberta">${ic('download', 14)}CSV desta aba</button><button class="btn btn-line btn-sm" id="rf-xlsx" title="Um Excel com todas as abas">${ic('download', 14)}Excel (todas as abas)</button>
     </div>
     <div class="kpis">
       <div class="kpi"><div class="l">Médicos no período</div><div class="v">${rep.entered}</div></div>
@@ -221,9 +221,15 @@ async function exportReport(rep, kind) {
     ['SLA RQE', ['Médico', 'Hospital', 'Etapa', 'Especialidade', 'SLA (h)', 'Decorrido (h)', 'Status'], rep.rqeItems.map((x) => [x.r.doctor?.name, x.r.doctor?.hospital, x.r.stage, x.r.specialty, x.sla, Math.round(x.elapsed), slaTxt(x.status)])],
     ['Hospitais', ['Hospital', 'Total', 'No período', 'Aprovados', 'Reprovados', 'Em pipeline', 'Vencidos', 'Atenção'], rep.hosp.map((h) => [h.nome, h.total, h.periodo, h.apr, h.rep, h.pipe, h.venc, h.aten])],
     ['Produtividade', ['Usuário', 'Total', 'Notas', 'Mudanças etapa', 'Documentos', 'Contatos/Cobranças'], Object.entries(rep.prod).map(([n, p]) => [n, p.total, p.note, p.stage_change, p.doc, p.contato])],
+    ['Formacao', ['Formação', 'Total', 'No fluxo', 'Aprovados', 'Reprovados', 'Vencidos'], rep.form.map((f) => [f.nome, f.total, f.fluxo, f.apr, f.rep, f.venc])],
+    ['Motivos de perda', ['Médico', 'Hospital', 'Motivo', 'Informado por', 'Desde'], S.doctors.filter((d) => d.stage === 'reprovado' && (!RF.hospital || d.hospital === RF.hospital))
+      .map((d) => [d.name, d.hospital, d.motivo_reprovacao || '(sem motivo: reprovado antes de 15/10)', d.reprovacao_origem || '', fmtDate(d.stage_entered_at)])],
   ];
   if (kind === 'csv') {
-    sheets.forEach(([name, h, rows], i) => setTimeout(() => downloadCsv(`${name.toLowerCase().replace(/\s+/g, '_')}_${suf}.csv`, h, rows), i * 250));
+    // um arquivo só: o da aba aberta (antes saíam 6 downloads de uma vez e o navegador bloqueava)
+    const porAba = { geral: 'Tempo Medio Etapas', hosp: 'Hospitais', form: 'Formacao', pipe: 'SLA Pipeline', rqe: 'SLA RQE', prod: 'Produtividade', perdas: 'Motivos de perda' };
+    const [name, h, rows] = sheets.find((x) => x[0] === porAba[RF.tab]) || sheets[0];
+    downloadCsv(`${name.toLowerCase().replace(/\s+/g, '_')}_${suf}.csv`, h, rows);
     return;
   }
   try {

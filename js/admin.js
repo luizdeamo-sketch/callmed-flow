@@ -328,6 +328,7 @@ async function drawHospitals() {
   });
   $$('[data-htog]').forEach((b) => b.onclick = async () => {
     const h = S.hospitals.find((x) => x.nome === b.dataset.htog);
+    if (h.ativo && counts[h.nome] && !(await confirmDlg('Inativar hospital', `"${h.nome}" tem ${counts[h.nome]} médico(s). Inativar tira o hospital das listas de cadastro; os médicos e o histórico continuam. Dá para reativar depois.`, { okText: 'Inativar' }))) return;
     const { error } = await sb.from('flow_hospitals').update({ ativo: !h.ativo }).eq('nome', h.nome);
     if (error) return toast(error.message, 'err');
     toast(`${h.nome} ${h.ativo ? 'inativado' : 'ativado'}`, 'ok');

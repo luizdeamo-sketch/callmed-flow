@@ -190,7 +190,7 @@ function drawMedico() {
       </div>
       <div class="person-actions">
         <button class="btn btn-line" id="pa-edit">${ic('edit', 15)}Editar cadastro</button>
-        ${d.whatsapp ? `<button class="btn btn-line" id="pa-wa">${ic('chat', 15)}WhatsApp</button>` : ''}
+        ${d.whatsapp ? `<button class="btn btn-line" id="pa-wa">${ic('whatsapp', 15)}WhatsApp</button>` : ''}
         <button class="btn btn-line" id="pa-msg">${ic('mail', 15)}Enviar cobrança</button>
         <button class="btn btn-line" id="pa-copy">⧉ Replicar para outro hospital</button>
         ${S.isAdmin ? `<button class="btn btn-line" id="pa-del" style="color:var(--red)">${ic('trash', 15)}Excluir</button>` : ''}
@@ -200,7 +200,7 @@ function drawMedico() {
           ${sla ? ` · ${sla.status === 'urgent' ? '<span class="tagx bad">SLA vencido</span>' : `<span class="tagx ${sla.status === 'warning' ? 'warn' : ''}">SLA: ${fmtRemaining(sla.remaining)} restantes</span>`}` : ''}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
           ${next ? `<button class="btn btn-line btn-sm" data-move="${next.id}">Mover → ${esc(next.label)}</button>` : ''}
-          <select class="inp" id="pv-movesel" style="width:auto;padding:6px 8px;font-size:12.5px"><option value="">Mover para…</option>${S.stages.filter((s) => s.id !== d.stage).map((s) => `<option value="${s.id}">${esc(s.label)}</option>`).join('')}</select>
+          <select class="inp" id="pv-movesel" style="width:auto;padding:6px 8px;font-size:12.5px"><option value="">Mover para…</option>${S.stages.filter((s) => s.id !== d.stage && !FINAL_STAGES.includes(s.id)).map((s) => `<option value="${s.id}">${esc(s.label)}</option>`).join('')}</select>
           ${d.stage !== 'aprovado' ? '<button class="btn btn-green btn-sm" data-move="aprovado">✓ Aprovar</button>' : ''}
           ${d.stage !== 'reprovado' ? '<button class="btn btn-danger btn-sm" data-move="reprovado">✗ Reprovar</button>' : ''}
         </div>
@@ -246,7 +246,7 @@ function drawResumoTab(body, d) {
   const yn = (b) => (b ? 'Sim' : 'Não');
   const diasFluxo = Math.floor((Date.now() - new Date(d.entry_date)) / 864e5) + 1;
   const contatos = PV.acts.filter((a) => a.type === 'contact' || a.type === 'cobranca').length;
-  const wa = d.whatsapp ? `${esc(d.whatsapp)} <a href="${waLink(d.whatsapp, '')}" target="_blank" rel="noopener" title="Abrir WhatsApp" aria-label="Abrir WhatsApp">${ic('chat', 14)}</a>` : '';
+  const wa = d.whatsapp ? `${esc(d.whatsapp)} <a href="${waLink(d.whatsapp, '')}" target="_blank" rel="noopener" title="Abrir WhatsApp" aria-label="Abrir WhatsApp">${ic('whatsapp', 14)}</a>` : '';
   body.innerHTML = `
     <div class="activity-strip" style="margin:0 0 14px">
       <div class="astat"><span class="an">${diasFluxo}</span><span class="al">Dias no fluxo</span></div>
@@ -440,7 +440,7 @@ async function updateDoctor(d, patch, description = 'Cadastro atualizado') {
 function replicate(d) {
   const m = openModal(`
     <div class="modal-head"><div><h2>Replicar cadastro</h2><div class="om-sub">${esc(d.name)}</div></div><button class="x" data-close>✕</button></div>
-    <div class="modal-body"><p style="margin-top:0">Será criado um novo cadastro de <b>${esc(d.name)}</b> em outro hospital, mantendo os dados pessoais. O fluxo recomeça em "Aguardando Contato".</p>
+    <div class="modal-body"><p style="margin-top:0">Será criado um novo cadastro de <b>${esc(d.name)}</b> em outro hospital, mantendo os dados pessoais. O fluxo recomeça em "${esc(stageLabel('aguardando_contato'))}".</p>
       <div class="field"><label>Novo hospital</label><select class="inp" id="rp-h"><option value="">Selecione…</option>${S.hospitals.filter((h) => h.ativo && h.nome !== d.hospital).map((h) => `<option>${esc(h.nome)}</option>`).join('')}</select></div></div>
     <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="rp-ok">Replicar</button></div>`, { size: 'sm' });
   $('#rp-ok', m.el).onclick = async () => {

@@ -24,6 +24,7 @@ const ICONS = {
   flame: '<path d="M8.5 14.5A2.5 2.5 0 0 0 11 12c0-1.38-.5-2-1-3-1.07-2.14-.22-4.05 2-6 .5 2.5 2 4.9 4 6.5 2 1.6 3 3.5 3 5.5a7 7 0 1 1-14 0c0-1.15.43-2.29 1-3a2.5 2.5 0 0 0 2.5 2.5z"/>',
   mail: '<rect width="20" height="16" x="2" y="4" rx="2"/><path d="m22 7-8.97 5.7a1.94 1.94 0 0 1-2.06 0L2 7"/>',
   chat: '<path d="M7.9 20A9 9 0 1 0 4 16.1L2 22Z"/>',
+  whatsapp: '<path d="M3 21l1.6-4.7A8.5 8.5 0 1 1 8 19.6Z"/><path d="M9 9.5c0 3 2.5 5.5 5.5 5.5l1.2-1.4-1.9-1-0.9 0.8c-0.9-0.4-1.9-1.4-2.3-2.3l0.8-0.9-1-1.9Z"/>',
   edit: '<path d="M21.17 6.81a1 1 0 0 0-3.98-3.98L3.84 16.17a2 2 0 0 0-.5.83l-1.32 4.35a.5.5 0 0 0 .62.62l4.35-1.32a2 2 0 0 0 .83-.5z"/>',
   trash: '<path d="M3 6h18M19 6v14c0 1-1 2-2 2H7c-1 0-2-1-2-2V6M8 6V4c0-1 1-2 2-2h4c1 0 2 1 2 2v2"/>',
   mic: '<path d="M12 2a3 3 0 0 0-3 3v7a3 3 0 0 0 6 0V5a3 3 0 0 0-3-3Z"/><path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v3"/>',
@@ -474,6 +475,16 @@ function subscribeNotifs() {
 // ---------- navegação ----------
 const VIEWS = {};
 const VIEW_TITLES = { hoje: 'Hoje', fluxo: 'Fluxo', medico: 'Médico', indicadores: 'Indicadores', sugestoes: 'Sugestões', rqe: 'RQE', relatorios: 'Relatórios', auditoria: 'Auditoria', usuarios: 'Administração' };
+/** Dica do "i" ao lado do título, por tela (sem dica, o "i" some). */
+const VIEW_INFO = {
+  hoje: 'Suas ações do dia, atrasadas primeiro. Feito registra o que foi feito e pede a próxima ação; Amanhã adia para o próximo dia útil.',
+  fluxo: 'Cada card é um médico em um hospital. A Jornada mostra dia a dia em que etapa do credenciamento ele esteve; o Kanban serve para mover de etapa arrastando. Clique no nome para abrir a ficha completa.',
+  medico: 'A ficha reúne o cadastro, os documentos e o histórico do médico neste hospital. Mover troca a etapa; tudo fica registrado no histórico.',
+  indicadores: 'Funil, tempo em cada etapa e SLA. Clique nos números para abrir o Fluxo já filtrado.',
+  relatorios: 'Relatórios por período, hospital e responsável, com exportação para Excel.',
+  sugestoes: 'Ideias, problemas e dúvidas sobre o sistema. Cada sugestão só aparece para quem a criou e para a gestão.',
+  usuarios: 'Quem acessa o Flow, com qual papel, e a lista oficial de hospitais.',
+};
 const VIEW_SUBS = { hoje: 'O que fazer agora', fluxo: 'Credenciamento de médicos', indicadores: 'Funil, SLA e gargalos', rqe: 'Registro de especialista no CREMESP', relatorios: 'Conversão, tempo e produtividade', auditoria: 'Quem fez o quê, e quando', sugestoes: 'Ideias e problemas do sistema', usuarios: 'Usuários e hospitais' };
 let currentView = 'fluxo';
 function go(view) {
@@ -483,6 +494,7 @@ function go(view) {
   $$('.view').forEach((v) => v.classList.toggle('active', v.id === 'view-' + view));
   $('#hdr-title').textContent = VIEW_TITLES[view];
   $('#hdr-sub').textContent = VIEW_SUBS[view] || '';
+  { const info = $('#hdr-info'); if (info) { const t = VIEW_INFO[view]; info.hidden = !t; info.title = t || ''; } }
   try { localStorage.setItem('flow:view2', view); } catch (_) { /* ignora */ }
   VIEWS[view] && VIEWS[view]();
   document.dispatchEvent(new CustomEvent('flow-tela', { detail: { view } }));

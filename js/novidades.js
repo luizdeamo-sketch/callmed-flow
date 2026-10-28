@@ -4,6 +4,16 @@
 /** Mais recente primeiro. `id` só cresce; a pessoa vê as versões com id maior que a última que ela já viu. */
 const NOVIDADES = [
   {
+    id: 7, data: '28/10', titulo: 'Ajustes da revisão geral',
+    itens: [
+      ['Aprovar pede confirmação', 'E avisa quando ainda há documentos pendentes. Aprovar e Reprovar ficam só nos botões próprios (saíram do "Mover para").'],
+      ['Feito sugere o passo seguinte', 'Ex.: depois de "Enviar cadastro ao hospital", sugere "Cobrar retorno do hospital".'],
+      ['Print do balão 💬 mais rápido', 'E certo mesmo com a tela rolada.'],
+      ['Relatórios', '"CSV desta aba" baixa um arquivo só; o Excel traz todas as abas, inclusive Formação e Motivos de perda.'],
+      ['Tela larga', 'No monitor grande, as listas do Hoje viram colunas.'],
+    ],
+  },
+  {
     id: 6, data: '27/10', titulo: 'Sugestões com retorno e print marcado',
     itens: [
       ['A resposta chega até você', 'Quando a gestão responde a sua sugestão, o aviso aparece na tela de onde ela saiu e o menu Sugestões mostra um número. Clique em "Ficou bom" ou "Ainda não ficou".'],
