@@ -416,12 +416,17 @@ function editDoctorDialog(d) {
       dt_resp_hospital: $('#ed-dtresp', el).value.trim(), observations: $('#ed-obs', el).value.trim(),
     };
     if (!patch.name) return toast('Informe o nome.', 'err');
-    const changed = Object.keys(patch).some((k) => JSON.stringify(patch[k]) !== JSON.stringify(d[k]));
-    if (!changed) return m.close();
-    if (await updateDoctor(d, patch, 'Cadastro atualizado')) { m.close(); await loadDoctorDetail(); drawMedico(); toast('Cadastro atualizado', 'ok'); }
+    const mudou = Object.keys(patch).filter((k) => JSON.stringify(patch[k] ?? '') !== JSON.stringify(d[k] ?? ''));
+    if (!mudou.length) return m.close();
+    // o histórico diz quais campos mudaram (só os nomes: os valores podem ser dados pessoais)
+    const desc = 'Cadastro atualizado: ' + uniq(mudou.map((k) => CAMPO_NOME[k] || k)).join(', ');
+    if (await updateDoctor(d, patch, desc)) { m.close(); await loadDoctorDetail(); drawMedico(); toast('Cadastro atualizado', 'ok'); }
   };
 }
 
+const CAMPO_NOME = { name: 'nome', crm: 'CRM', cpf: 'CPF', whatsapp: 'WhatsApp', hospital: 'hospital', rqe: 'RQE', estado: 'UF', status_especialidade: 'formação',
+  disc: 'DISC', medsimples: 'MedSimples', setores: 'setores', doc_pendente: 'doc. pendente', cobranca: 'cobrança', cobranca_medsimples: 'cobrança MedSimples',
+  cobranca2: 'cobrança 2', dt_cobranca_doc: 'dt. cobrança doc.', dt_email_enviado: 'dt. e-mail enviado', dt_resp_hospital: 'dt. resposta hospital', observations: 'observações' };
 /** Atualiza campos do médico e registra no histórico (o banco gera a notificação para "Cadastro atualizado"). */
 async function updateDoctor(d, patch, description = 'Cadastro atualizado') {
   const { data, error } = await sb.from('flow_doctors').update(patch).eq('id', d.id).select().single();

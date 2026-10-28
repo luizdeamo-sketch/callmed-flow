@@ -676,3 +676,25 @@ begin
 end $$;
 revoke all on function public.flow_sugestao_retorno(uuid, text, text) from public, anon;
 grant execute on function public.flow_sugestao_retorno(uuid, text, text) to authenticated;
+
+-- ---------- migração 16 (28/10/2026): histórico lista os campos alterados; o aviso aceita "Cadastro atualizado: <campos>" ----------
+create or replace function public.flow_activities_notify()
+ returns trigger language plpgsql security definer set search_path to 'public' as $function$
+declare v_nome text; v_msg text;
+begin
+  if new.doctor_id is null or new.created_by is null or auth.uid() is null then return new; end if;
+  select name into v_nome from public.flow_doctors where id = new.doctor_id;
+  if new.type = 'stage_change' and new.description like 'Movido para %' then
+    v_msg := format('%s foi movido para "%s"', v_nome, substr(new.description, 13));
+  elsif new.type = 'note' and new.description like 'Cadastro atualizado%' then
+    v_msg := format('Cadastro de %s foi atualizado%s', v_nome, case when new.description like 'Cadastro atualizado: %' then ' (' || left(substr(new.description, 22), 120) || ')' else '' end);
+  elsif new.type = 'note' then
+    v_msg := format('Nova anotação em %s: "%s"', v_nome, left(new.description, 80) || case when length(new.description) > 80 then '...' else '' end);
+  else
+    return new;
+  end if;
+  insert into public.flow_notifications (user_id, doctor_id, doctor_name, message, created_by_name)
+  select p.user_id, new.doctor_id, coalesce(v_nome,''), v_msg, new.created_by_name
+    from public.flow_profiles p where p.ativo and p.user_id <> new.created_by;
+  return new;
+end $function$;
