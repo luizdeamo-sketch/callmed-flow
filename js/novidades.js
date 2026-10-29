@@ -4,6 +4,13 @@
 /** Mais recente primeiro. `id` só cresce; a pessoa vê as versões com id maior que a última que ela já viu. */
 const NOVIDADES = [
   {
+    id: 8, data: '29/10', titulo: 'Kanban mais fácil de navegar',
+    itens: [
+      ['Barra de rolagem no rodapé', 'No Kanban, a barra para ir às outras colunas agora fica sempre visível no rodapé da tela (pedido da Denise).'],
+      ['Renomear coluna', 'Administradores clicam no ✎ do cabeçalho da coluna para trocar o nome. O histórico e os relatórios continuam certos.'],
+    ],
+  },
+  {
     id: 7, data: '28/10', titulo: 'Ajustes da revisão geral',
     itens: [
       ['Aprovar pede confirmação', 'E avisa quando ainda há documentos pendentes. Aprovar e Reprovar ficam só nos botões próprios (saíram do "Mover para").'],

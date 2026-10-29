@@ -127,6 +127,10 @@
 
   /* ---------- kanban ---------- */
   .kanban-wrap{ overflow-x:auto; padding-bottom:10px;}
+  .kb-barra{ position:sticky; bottom:0; z-index:4; overflow-x:auto; overflow-y:hidden; height:18px; margin-top:4px; background:var(--surface); border-top:1px solid var(--border); border-radius:0 0 var(--radius-sm) var(--radius-sm);}
+  .kb-barra > div{ height:1px;}
+  .kb-barra::-webkit-scrollbar{ height:14px;} .kb-barra::-webkit-scrollbar-thumb{ background:var(--border-strong, #b9bccb); border-radius:7px; border:3px solid var(--surface);}
+  .kanban-wrap::-webkit-scrollbar{ height:12px;} .kanban-wrap::-webkit-scrollbar-thumb{ background:#c9ccd8; border-radius:6px;}
   .kanban-board{ display:flex; gap:12px; align-items:flex-start; min-height:420px;}
   .kanban-col{ background:var(--surface-2); border:1px solid var(--border); border-radius:var(--radius-md); width:272px; flex:0 0 272px; display:flex; flex-direction:column; max-height:calc(100vh - 150px);}
   .kanban-col.drop{ border-color:var(--brand); background:var(--brand-soft);}
@@ -779,17 +783,17 @@
 
 <script>window.FLOW_DEMO = new URLSearchParams(location.search).has('demo');</script>
 <script>window.FLOW_FALHAS = []; window.addEventListener('error', function (e) { var t = e.target; if (t && t.tagName === 'SCRIPT') window.FLOW_FALHAS.push(String(t.src).split('/').pop().split('?')[0]); }, true);</script>
-<script src="config.js?v=20261028173247"></script>
-<script src="js/core.js?v=20261028173247"></script>
-<script src="js/hoje.js?v=20261028173247"></script>
-<script src="js/fluxo.js?v=20261028173247"></script>
-<script src="js/doctor.js?v=20261028173247"></script>
-<script src="js/rqe.js?v=20261028173247"></script>
-<script src="js/reports.js?v=20261028173247"></script>
-<script src="js/sugestoes.js?v=20261028173247"></script>
-<script src="js/admin.js?v=20261028173247"></script>
-<script src="js/acompanhante.js?v=20261028173247"></script>
-<script src="js/novidades.js?v=20261028173247"></script>
-<script>if (window.FLOW_DEMO) document.write('<script src="js/demo.js?v=20261028173247"><\/script><script src="js/demo-tour.js?v=20261028173247"><\/script>');</script>
+<script src="config.js?v=20261029161538"></script>
+<script src="js/core.js?v=20261029161538"></script>
+<script src="js/hoje.js?v=20261029161538"></script>
+<script src="js/fluxo.js?v=20261029161538"></script>
+<script src="js/doctor.js?v=20261029161538"></script>
+<script src="js/rqe.js?v=20261029161538"></script>
+<script src="js/reports.js?v=20261029161538"></script>
+<script src="js/sugestoes.js?v=20261029161538"></script>
+<script src="js/admin.js?v=20261029161538"></script>
+<script src="js/acompanhante.js?v=20261029161538"></script>
+<script src="js/novidades.js?v=20261029161538"></script>
+<script>if (window.FLOW_DEMO) document.write('<script src="js/demo.js?v=20261029161538"><\/script><script src="js/demo-tour.js?v=20261029161538"><\/script>');</script>
 </body>
 </html>

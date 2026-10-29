@@ -701,3 +701,6 @@ end $function$;
 
 -- ---------- migração 17 (28/10/2026): recado em destaque (abre numa janela ao entrar; some com "Entendi") ----------
 alter table public.flow_notifications add column if not exists destaque boolean not null default false;
+
+-- ---------- migração 18 (29/10/2026): nomes antigos das colunas (renomear sem perder o histórico) ----------
+alter table public.flow_stages add column if not exists apelidos text[] not null default '{}';

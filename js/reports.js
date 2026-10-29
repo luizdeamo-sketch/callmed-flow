@@ -10,13 +10,19 @@ async function loadAllActivities(force) {
 }
 /** Linha do tempo de etapas de cada médico a partir do histórico ("Cadastro criado" + "Movido para X"). */
 function stageEvents(acts) {
-  const byLabel = Object.fromEntries(S.stages.map((s) => [s.label, s.id]));
+  // ordem: colunas oficiais (nome atual e nomes antigos) > nomes do sistema antigo > colunas extras criadas depois.
+  // Assim uma coluna extra com o mesmo nome de uma etapa antiga não "rouba" o histórico.
+  const byLabel = {};
+  const add = (l, id) => { if (l && !(l in byLabel)) byLabel[l] = id; };
+  S.stages.filter((s) => !s.is_custom).forEach((s) => { add(s.label, s.id); (s.apelidos || []).forEach((l) => add(l, s.id)); });
+  Object.entries(STAGE_ALIASES).forEach(([l, id]) => add(l, id));
+  S.stages.filter((s) => s.is_custom).forEach((s) => { add(s.label, s.id); (s.apelidos || []).forEach((l) => add(l, s.id)); });
   const ev = {};
   acts.forEach((a) => {
     if (!a.doctor_id || a.type !== 'stage_change') return;
     let st = null;
     if (a.description === 'Cadastro criado no sistema') st = 'aguardando_contato';
-    else if (a.description.startsWith('Movido para ')) { const l = a.description.slice(12); st = byLabel[l] || STAGE_ALIASES[l] || null; }
+    else if (a.description.startsWith('Movido para ')) { const l = a.description.slice(12); st = byLabel[l] || null; }
     if (st) (ev[a.doctor_id] ||= []).push({ at: new Date(a.created_at), stage: st });
   });
   return ev;

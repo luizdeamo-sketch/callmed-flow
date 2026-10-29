@@ -609,14 +609,22 @@ function renderBoard(list) {
       <div class="kanban-col-head" ${S.isAdmin ? 'draggable="true"' : ''} data-colhead="${s.id}">
         ${S.isAdmin ? '<span class="grip" title="Arraste para reordenar">⋮⋮</span>' : ''}
         <span class="cdot" style="background:${esc(s.color)}"></span><span class="lbl2">${esc(s.label)}</span><span class="cnt">${items.length}</span>
+        ${S.isAdmin ? `<button class="del" data-rencol="${s.id}" title="Renomear coluna" aria-label="Renomear coluna">✎</button>` : ''}
         ${S.isAdmin && s.is_custom ? `<button class="del" data-delcol="${s.id}" title="Excluir coluna" aria-label="Excluir coluna">${ic('trash', 13)}</button>` : ''}
       </div>
       <div class="kanban-col-body">${items.slice(0, lim).map(cardHtml).join('') || '<div class="empty">Nenhum médico</div>'}
         ${items.length > lim ? `<button class="more-btn" data-more="${s.id}">Mostrar mais ${items.length - lim} médico(s)</button>` : ''}
         ${lim > 80 ? `<button class="more-btn" data-less="${s.id}">Mostrar menos</button>` : ''}</div>
     </div>`;
-  }).join('')}${S.isAdmin ? '<button class="newcol" id="fx-newcol">＋ Nova coluna</button>' : ''}</div></div>`;
+  }).join('')}${S.isAdmin ? '<button class="newcol" id="fx-newcol">＋ Nova coluna</button>' : ''}</div></div>
+    <div class="kb-barra" id="kb-barra" title="Arraste para ver as outras colunas"><div></div></div>`;
   const board = $('#fx-board');
+  // barra de rolagem lateral fixa no rodapé da tela (a do quadro ficava lá embaixo, fora da vista) — pedido da Denise, 29/10
+  { const wrap = $('.kanban-wrap', body), barra = $('#kb-barra'), dentro = barra.firstElementChild;
+    const medir = () => { dentro.style.width = wrap.scrollWidth + 'px'; barra.hidden = wrap.scrollWidth <= wrap.clientWidth + 2; };
+    barra.onscroll = () => { if (Math.abs(wrap.scrollLeft - barra.scrollLeft) > 1) wrap.scrollLeft = barra.scrollLeft; };
+    wrap.onscroll = () => { if (Math.abs(barra.scrollLeft - wrap.scrollLeft) > 1) barra.scrollLeft = wrap.scrollLeft; };
+    medir(); setTimeout(medir, 300); window.addEventListener('resize', medir); }
   $$('.kcard', board).forEach((c) => {
     c.onclick = () => { const d = S.doctors.find((x) => x.id === c.dataset.id); if (d) openDoctor(d); };
     c.ondragstart = (e) => { dragDoctor = c.dataset.id; dragCol = null; c.classList.add('dragging'); e.dataTransfer.effectAllowed = 'move'; };
@@ -643,6 +651,7 @@ function renderBoard(list) {
   $$('[data-more]', board).forEach((b) => b.onclick = () => { colLimit[b.dataset.more] = (colLimit[b.dataset.more] || 80) + 80; refreshFluxo(); });
   $$('[data-less]', board).forEach((b) => b.onclick = () => { colLimit[b.dataset.less] = 80; refreshFluxo(); });
   $$('[data-delcol]', board).forEach((b) => b.onclick = (e) => { e.stopPropagation(); deleteStage(b.dataset.delcol); });
+  $$('[data-rencol]', board).forEach((b) => b.onclick = (e) => { e.stopPropagation(); renameStage(b.dataset.rencol); });
   const nc = $('#fx-newcol');
   if (nc) nc.onclick = openNewStage;
 }
@@ -747,6 +756,29 @@ function openNewStage() {
     if (error) return toast('Não foi possível criar coluna: ' + error.message, 'err');
     S.stages = [row, ...shifted];
     m.close(); toast('Coluna criada', 'ok'); buildFilters(); refreshFluxo();
+  };
+}
+/** Renomear coluna (só administrador). O nome antigo vai para `apelidos`, para o histórico continuar reconhecido. */
+function renameStage(id) {
+  const st = stageById(id); if (!st) return;
+  const m = openModal(`<div class="modal-head"><div><h2>Renomear coluna</h2><div class="om-sub">O nome muda para todo mundo. O histórico e os relatórios continuam certos.</div></div><button class="x" data-close>✕</button></div>
+    <div class="modal-body"><div class="field"><label>Nome da coluna</label><input class="inp" id="rc-nome" maxlength="40" value="${esc(st.label)}"></div>
+      <div class="hint">Ex.: "Documentação" para "Documentação pendente". Os ${S.doctors.filter((d) => d.stage === id).length} médico(s) desta coluna continuam nela.</div></div>
+    <div class="modal-foot"><button class="btn btn-line" data-close>Cancelar</button><button class="btn btn-primary" id="rc-ok">Salvar</button></div>`, { size: 'sm' });
+  setTimeout(() => { const i = $('#rc-nome', m.el); i.focus(); i.select(); }, 50);
+  $('#rc-nome', m.el).onkeydown = (e) => { if (e.key === 'Enter') $('#rc-ok', m.el).click(); };
+  $('#rc-ok', m.el).onclick = async () => {
+    const nome = $('#rc-nome', m.el).value.replace(/\s+/g, ' ').trim();
+    if (nome.length < 2) return toast('Digite o nome da coluna.', 'err');
+    if (nome === st.label) return m.close();
+    if (S.stages.some((x) => x.id !== id && norm(x.label) === norm(nome))) return toast('Já existe uma coluna com esse nome.', 'err');
+    const apelidos = uniq([...(st.apelidos || []), st.label]).filter((l) => l !== nome);
+    const { error } = await sb.from('flow_stages').update({ label: nome, apelidos }).eq('id', id);
+    if (error) return toast(friendlyDbError(error, 'Erro ao renomear'), 'err');
+    Object.assign(st, { label: nome, apelidos });
+    m.close(); toast(`Coluna renomeada para "${nome}"`, 'ok');
+    STAGE_EV = null; if (typeof ACTS !== 'undefined') ACTS = null;
+    refreshFluxo();
   };
 }
 async function deleteStage(id) {
