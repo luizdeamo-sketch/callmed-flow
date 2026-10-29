@@ -4,6 +4,14 @@
 /** Mais recente primeiro. `id` só cresce; a pessoa vê as versões com id maior que a última que ela já viu. */
 const NOVIDADES = [
   {
+    id: 9, data: '29/10', titulo: 'Quem faz o quê no fluxo',
+    itens: [
+      ['Escalista', 'Cadastra o médico (entra em Primeiro contato), pode mover para Aguardando médico e corrigir os cadastros que ele mesmo fez. Também registra a próxima ação (Feito / Amanhã) de qualquer médico.'],
+      ['Cadastro e gestão', 'Avançam as outras etapas, aprovam e reprovam, como antes.'],
+      ['Coluna "Documentação pendente"', 'Voltou a ter o nome que o time conhece, e a coluna repetida foi unificada nela.'],
+    ],
+  },
+  {
     id: 8, data: '29/10', titulo: 'Kanban mais fácil de navegar',
     itens: [
       ['Barra de rolagem no rodapé', 'No Kanban, a barra para ir às outras colunas agora fica sempre visível no rodapé da tela (pedido da Denise).'],

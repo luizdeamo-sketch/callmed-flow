@@ -476,6 +476,8 @@ function subscribeNotifs() {
 const VIEWS = {};
 const VIEW_TITLES = { hoje: 'Hoje', fluxo: 'Fluxo', medico: 'Médico', indicadores: 'Indicadores', sugestoes: 'Sugestões', rqe: 'RQE', relatorios: 'Relatórios', auditoria: 'Auditoria', usuarios: 'Administração' };
 /** Dica do "i" ao lado do título, por tela (sem dica, o "i" some). */
+/** Escalista (setor Escalas, sem ser administrador): cadastra, move só de Primeiro contato para Aguardando médico e edita só o que criou. O banco garante. */
+function ehEscalista() { return !!(S.profile && S.profile.setor === 'escalas' && !S.isAdmin); }
 const VIEW_INFO = {
   hoje: 'Suas ações do dia, atrasadas primeiro. Feito registra o que foi feito e pede a próxima ação; Amanhã adia para o próximo dia útil.',
   fluxo: 'Cada card é um médico em um hospital. A Jornada mostra dia a dia em que etapa do credenciamento ele esteve; o Kanban serve para mover de etapa arrastando. Clique no nome para abrir a ficha completa.',

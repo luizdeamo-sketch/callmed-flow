@@ -659,6 +659,10 @@ function renderBoard(list) {
 /** Move o médico de etapa e registra no histórico (o banco gera as notificações). */
 async function moveDoctor(d, toStage) {
   const st = stageById(toStage);
+  if (ehEscalista() && !(d.stage === 'aguardando_contato' && toStage === 'aguardando_medico')) {
+    toast('Escalista só pode mover de Primeiro contato para Aguardando médico. As outras etapas são com o Cadastro.', 'err');
+    return false;
+  }
   let rep = null;
   if (toStage === 'reprovado') { rep = await reprovacaoDialog(d); if (!rep) return false; }
   if (toStage === 'aprovado' && d.stage !== 'aprovado') {

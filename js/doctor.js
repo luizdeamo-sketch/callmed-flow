@@ -5,6 +5,7 @@ function afterDoctorChange() {
   if (currentView === 'fluxo') refreshFluxo(); else VIEWS[currentView] && VIEWS[currentView]();
 }
 function friendlyDbError(error, fallback) {
+  if (error?.code === '42501' && error.message && !/row-level security/i.test(error.message)) return error.message; // regras do banco (ex.: escalista) já vêm com o texto para a pessoa
   if (error?.code === '23505') return error.message?.includes('Duplicidade') ? error.message : 'Este médico já está cadastrado neste hospital.';
   return `${fallback}: ${error?.message || 'erro desconhecido'}`;
 }
@@ -189,7 +190,7 @@ function drawMedico() {
         <button class="ptag ${d.priority === 'urgente' ? 'bad' : d.priority === 'hospital_novo' ? 'warn' : ''}" id="pv-prio" style="cursor:pointer" title="Clique para alternar urgência (vale por 7 dias)">${PRIORITIES[d.priority] || d.priority}${d.priority === 'urgente' && d.urgente_ate ? ' até ' + fmtYmd(d.urgente_ate) : ''}</button>
       </div>
       <div class="person-actions">
-        <button class="btn btn-line" id="pa-edit">${ic('edit', 15)}Editar cadastro</button>
+        ${!ehEscalista() || d.created_by === S.user.id ? `<button class="btn btn-line" id="pa-edit">${ic('edit', 15)}Editar cadastro</button>` : ''}
         ${d.whatsapp ? `<button class="btn btn-line" id="pa-wa">${ic('whatsapp', 15)}WhatsApp</button>` : ''}
         <button class="btn btn-line" id="pa-msg">${ic('mail', 15)}Enviar cobrança</button>
         <button class="btn btn-line" id="pa-copy">⧉ Replicar para outro hospital</button>
@@ -199,10 +200,11 @@ function drawMedico() {
         <div><b>Etapa atual:</b> <span class="op-dot" style="display:inline-block;background:${esc(st?.color || '#999')};margin:0 4px"></span>${esc(st?.label || d.stage)} · há ${diasEtapa} dia(s)
           ${sla ? ` · ${sla.status === 'urgent' ? '<span class="tagx bad">SLA vencido</span>' : `<span class="tagx ${sla.status === 'warning' ? 'warn' : ''}">SLA: ${fmtRemaining(sla.remaining)} restantes</span>`}` : ''}</div>
         <div style="display:flex;gap:6px;flex-wrap:wrap;align-items:center">
+          ${ehEscalista() ? (d.stage === 'aguardando_contato' ? `<button class="btn btn-line btn-sm" data-move="aguardando_medico">Mover → ${esc(stageLabel('aguardando_medico'))}</button>` : '<span class="muted small">As próximas etapas são com o Cadastro.</span>') : `
           ${next ? `<button class="btn btn-line btn-sm" data-move="${next.id}">Mover → ${esc(next.label)}</button>` : ''}
           <select class="inp" id="pv-movesel" style="width:auto;padding:6px 8px;font-size:12.5px"><option value="">Mover para…</option>${S.stages.filter((s) => s.id !== d.stage && !FINAL_STAGES.includes(s.id)).map((s) => `<option value="${s.id}">${esc(s.label)}</option>`).join('')}</select>
           ${d.stage !== 'aprovado' ? '<button class="btn btn-green btn-sm" data-move="aprovado">✓ Aprovar</button>' : ''}
-          ${d.stage !== 'reprovado' ? '<button class="btn btn-danger btn-sm" data-move="reprovado">✗ Reprovar</button>' : ''}
+          ${d.stage !== 'reprovado' ? '<button class="btn btn-danger btn-sm" data-move="reprovado">✗ Reprovar</button>' : ''}`}
         </div>
       </div>
       ${nextStripHtml(d)}
@@ -218,7 +220,7 @@ function drawMedico() {
     if (await updateDoctor(d, { priority: np, urgente_ate: np === 'urgente' ? urgenteAte() : null }, np === 'urgente' ? `Marcado como urgente até ${fmtYmd(urgenteAte())}` : 'Prioridade alterada para Rotina')) { toast(np === 'urgente' ? `Urgente até ${fmtYmd(urgenteAte())}` : 'Voltou para rotina', 'ok'); await loadDoctorDetail(); drawMedico(); }
   };
   bindNextStrip(d, async () => { await loadDoctorDetail(); drawMedico(); });
-  $('#pa-edit').onclick = () => editDoctorDialog(d);
+  { const b = $('#pa-edit'); if (b) b.onclick = () => editDoctorDialog(d); }
   $('#pa-msg').onclick = () => openMessages(d);
   $('#pa-copy').onclick = () => replicate(d);
   const del = $('#pa-del'); if (del) del.onclick = () => deleteDoctor(d);
@@ -234,7 +236,7 @@ function drawMedico() {
     };
   };
   $$('[data-move]', root).forEach((b) => b.onclick = async () => { if (await moveDoctor(d, b.dataset.move)) { await loadDoctorDetail(); drawMedico(); } });
-  $('#pv-movesel').onchange = async (e) => { if (e.target.value && await moveDoctor(d, e.target.value)) { await loadDoctorDetail(); drawMedico(); } };
+  if ($('#pv-movesel')) $('#pv-movesel').onchange = async (e) => { if (e.target.value && await moveDoctor(d, e.target.value)) { await loadDoctorDetail(); drawMedico(); } };
 
   const body = $('#pv-body');
   if (PV.tab === 'docs') return drawDocsTab(body, d);

@@ -704,3 +704,37 @@ alter table public.flow_notifications add column if not exists destaque boolean 
 
 -- ---------- migração 18 (29/10/2026): nomes antigos das colunas (renomear sem perder o histórico) ----------
 alter table public.flow_stages add column if not exists apelidos text[] not null default '{}';
+
+-- ---------- migração 19 (29/10/2026): regra do escalista (setor 'escalas' sem ser administrador) ----------
+-- cadastra em Primeiro contato; move só de Primeiro contato para Aguardando médico; edita só o que criou;
+-- registra a próxima ação de qualquer médico. Também: coluna "Documentação pendente" unificada (a extra foi removida).
+create or replace function public.flow_e_escalista() returns boolean
+ language sql stable security definer set search_path to 'public' as $$
+  select coalesce((select p.setor = 'escalas' from public.flow_profiles p where p.user_id = auth.uid()), false)
+     and not public.flow_is_admin();
+$$;
+revoke all on function public.flow_e_escalista() from public, anon;
+grant execute on function public.flow_e_escalista() to authenticated;
+create or replace function public.flow_doctors_escalista_guard() returns trigger
+ language plpgsql security definer set search_path to 'public' as $$
+declare livres text[] := array['proxima_acao','proxima_data','proximo_responsavel_id','updated_at','stage','stage_entered_at','sla_hours'];
+begin
+  if auth.uid() is null or not public.flow_e_escalista() then return new; end if;
+  if tg_op = 'INSERT' then
+    if new.stage is distinct from 'aguardando_contato' then
+      raise exception 'Escalista cadastra o médico em Primeiro contato; quem avança as etapas é o Cadastro.' using errcode = '42501';
+    end if;
+    return new;
+  end if;
+  if new.stage is distinct from old.stage and not (old.stage = 'aguardando_contato' and new.stage = 'aguardando_medico') then
+    raise exception 'Escalista só pode mover de Primeiro contato para Aguardando médico. As outras etapas são com o Cadastro.' using errcode = '42501';
+  end if;
+  if old.created_by is distinct from auth.uid() and (to_jsonb(new) - livres) is distinct from (to_jsonb(old) - livres) then
+    raise exception 'Escalista só pode editar os cadastros que ele mesmo criou. Peça ao Cadastro para corrigir este.' using errcode = '42501';
+  end if;
+  return new;
+end $$;
+revoke all on function public.flow_doctors_escalista_guard() from public, anon, authenticated;
+drop trigger if exists flow_doctors_escalista on public.flow_doctors;
+create trigger flow_doctors_escalista before insert or update on public.flow_doctors
+  for each row execute function public.flow_doctors_escalista_guard();
