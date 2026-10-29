@@ -50,7 +50,7 @@ function ic(name, size) {
 document.querySelectorAll('[data-ic]').forEach((el) => { el.outerHTML = ic(el.dataset.ic, +el.dataset.size || 16); });
 
 // ---------- constantes do domínio (copiadas do Flow original) ----------
-const SETORES = ['UTI', 'ANESTESIA', 'ENFERMARIA', 'AMBULATÓRIO', 'PREVENT', 'PRONTO ATENDIMENTO', 'SADT', 'EMERGÊNCIA', 'ORTOPEDIA'];
+const SETORES = ['UTI', 'ANESTESIA', 'ENFERMARIA', 'AMBULATÓRIO', 'PREVENT', 'PRONTO ATENDIMENTO', 'SADT', 'EMERGÊNCIA', 'ORTOPEDIA', 'CLÍNICA MÉDICA', 'MEDICINA INTENSIVA'];
 const STATUS_ESP = ['FORMADO', 'FORMADO C/ RQE', 'R1', 'R2', 'R3'];
 const DISC = ['ADERENTE', 'NÃO APLICAVEL', 'REPROVADO', 'AGUARDANDO RETORNO'];
 const DISC_LABEL = { 'ADERENTE': 'Aderente', 'NÃO APLICAVEL': 'Não Aplicável', 'REPROVADO': 'Reprovado', 'AGUARDANDO RETORNO': 'Ag. Retorno' };
