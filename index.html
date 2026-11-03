@@ -1,0 +1,12 @@
+<!doctype html>
+<html lang="pt-BR"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>CallMed Flow mudou de endereço</title>
+<script>
+  // leva qualquer link antigo (com caminho, ?parâmetros e #trecho) para o mesmo ponto no endereço novo
+  (function () {
+    var resto = location.pathname.replace(/^\/callmed-flow\/?/, '');
+    location.replace('https://callmed-saude.github.io/flow/' + resto + location.search + location.hash);
+  })();
+</script>
+<style>body{font-family:system-ui,sans-serif;display:flex;align-items:center;justify-content:center;min-height:100vh;margin:0;background:#f6f7fb;color:#1b1d29}a{color:#1029e8}</style>
+</head><body><p>O CallMed Flow mudou de endereço: <a href="https://callmed-saude.github.io/flow/">callmed-saude.github.io/flow</a></p></body></html>
